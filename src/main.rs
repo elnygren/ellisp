@@ -7,7 +7,7 @@ use std::io::prelude::*;
 extern crate itertools;
 
 /// Token is just a string
-/// Ellisp program is a string that is first tokenised `String => Vec<Token>`
+/// ellisp program is a string that is first tokenised `String => Vec<Token>`
 /// and then atomized by our parser `Token => Atom`
 type Token = String;
 
@@ -122,7 +122,7 @@ fn atomize(token: Token) -> Atom {
 }
 
 /// build AST Tree recursively
-fn parser(tokens: &mut Vec<String>) -> AST {
+fn parser(tokens: &mut Vec<Token>) -> AST {
 	let token = tokens.remove(0);
 	let results: AST = match token.as_str() {
 		"(" => {
@@ -276,8 +276,8 @@ fn eval(ast: &AST, denv: &mut Box<DynamicEnv>, pstore: &mut LambdaContextStore) 
 		// we are processing an AST Atom; a leaf of the AST
 		// if the Atom is a Number/Bool, then it's a Number/Bool expression
 		// if it's a symbol:
-		// 	a) try to find the atom from Ellisp static environment
-		// 	b) TODO: try to find the atom from Ellisp dynamic environment
+		// 	a) try to find the atom from ellisp static environment
+		// 	b) TODO: try to find the atom from ellisp dynamic environment
 		Some(atom) => match atom {
 			Atom::Symbol(x) => match x.as_str() {
 				// static env
@@ -377,7 +377,7 @@ fn eval(ast: &AST, denv: &mut Box<DynamicEnv>, pstore: &mut LambdaContextStore) 
 
 
 fn repl(env: &mut Box<DynamicEnv>, pstore: &mut LambdaContextStore) {
-	println!("Ellisp 0.1 REPL\n\n> ");
+	println!("ellisp 0.1 REPL\n\n> ");
 	let _ = io::stdout().flush();
 	let stdin = io::stdin();
 	let stdin_lock = stdin.lock();
