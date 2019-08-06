@@ -328,16 +328,16 @@ fn repl(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>>)
 /// quick & dirty way to run some program
 fn driver(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>>) {
   let program = "
-		; def + lambdas
-		(def a (lambda (x) (+ x 40)))
-		(def b (lambda (x) (+ 0 2)))
-		(def c (24))
-		(def d -24)
-		(def result-1 (+ (a 2) (b 666) c d))
-		(do result-1)
-		; (def fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
-		; (fib 4)
-	";
+  ; def + lambdas
+  (def a (lambda (x) (+ x 40)))
+  (def b (lambda (x) (+ 0 2)))
+  (def c (24))
+  (def d -24)
+  (def result-1 (+ (a 2) (b 666) c d))
+  (do result-1)
+  ; (def fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
+  ; (fib 4)
+  ";
 
   let program = format!(
     "\n(do\n  ; programs are wrapped in a do-block\n{}\n)",
