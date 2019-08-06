@@ -1,20 +1,19 @@
 use regex::Regex;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::env;
 use std::io;
 use std::io::prelude::*;
-use std::cell::RefCell;
 use std::rc::Rc;
-use std::env;
 
 mod builtins;
 mod types;
 
-use types::{Expr};
-use builtins::{ellisp_begin, ellisp_equal, ellisp_minus, ellisp_sum, ellisp_smaller_than};
+use builtins::{ellisp_begin, ellisp_equal, ellisp_minus, ellisp_smaller_than, ellisp_sum};
+use types::Expr;
 
 #[macro_use]
 extern crate itertools;
-
 
 /// Token is just a string
 /// ellisp program is a string that is first tokenised `String => Vec<Token>`
@@ -44,7 +43,7 @@ struct AST {
 #[derive(Debug, Clone)]
 struct DynamicEnv<'a> {
   // parent: Option<DynamicEnv>,
-	parent: Rc<Option<&'a DynamicEnv<'a>>>,
+  parent: Rc<Option<&'a DynamicEnv<'a>>>,
   env: HashMap<String, Expr>,
 }
 
@@ -57,7 +56,7 @@ impl<'a> DynamicEnv<'a> {
     match v {
       Some(v) => *v,
       None => {
-				return self.parent.unwrap().find(key);
+        return self.parent.unwrap().find(key);
       }
     }
   }
@@ -81,7 +80,6 @@ impl LambdaContext {
 }
 
 type LambdaContextStore = Vec<LambdaContext>;
-
 
 /// we only support s-expressions and comments
 /// so we can just expand spaces everywhere and split by it
@@ -159,7 +157,7 @@ fn lambda_call(
     local_env.insert(arg_name.to_string(), *arg_value);
   }
 
-	let denv = denv.try_borrow().unwrap();
+  let denv = denv.try_borrow().unwrap();
   let denv = Rc::new(RefCell::new(DynamicEnv {
     env: local_env,
     parent: Rc::new(Some(&denv)),
@@ -199,7 +197,11 @@ fn proc_call(
 /// We traverse the AST recursively evaluating every leaf so we can reduce everything
 /// to (proc arg1 arg2 ... argN) form and just call the function corresponding to proc
 /// eg. (sum 1 2 3 ... N) -> sum([1,2,3...N]) (in rust)
-fn eval(ast: &AST, denv: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>>) -> Expr {
+fn eval(
+  ast: &AST,
+  denv: &Rc<RefCell<DynamicEnv>>,
+  pstore: &Rc<RefCell<LambdaContextStore>>,
+) -> Expr {
   // println!("eval called: \n	{:?}\n	{:?}", ast, denv);
   match &ast.atom {
     // we are processing an AST Atom; a leaf of the AST
@@ -248,7 +250,7 @@ fn eval(ast: &AST, denv: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaCon
               {
                 Atom::Symbol(name) => {
                   let res = eval(&expr, denv, pstore);
-									denv.borrow_mut().env.insert(name.to_string(), res);
+                  denv.borrow_mut().env.insert(name.to_string(), res);
                 }
                 _ => panic!("def first arg must be a symbol!"),
               }
@@ -288,7 +290,9 @@ fn eval(ast: &AST, denv: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaCon
                 })
                 .collect();
 
-              pstore.borrow_mut().push(LambdaContext::new(&body, arg_names));
+              pstore
+                .borrow_mut()
+                .push(LambdaContext::new(&body, arg_names));
               return Expr::LambdaId(pstore.borrow().len() - 1);
             }
             _ => proc_call(&ast, denv, pstore, &first),
@@ -320,7 +324,7 @@ fn repl(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>>)
 
 /// quick & dirty way to run some program
 fn driver(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>>) {
-	let program = "
+  let program = "
 		; def + lambdas
 		(def a (lambda (x) (+ x 40)))
 		(def b (lambda (x) (+ 0 2)))
@@ -332,33 +336,33 @@ fn driver(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>
 		; (fib 4)
 	";
 
-	let program = format!(
-		"\n(do\n  ; programs are wrapped in a do-block\n{}\n)",
-		program
-	);
-	let program = program.as_str();
-	let mut tokens = tokenize(program);
-	// println!("tokens are: {:?}", tokens);
-	let ast = parser(&mut tokens);
-	// println!("AST: {:?}", ast);
-	let output = eval(&ast, &env, &pstore);
-	println!("Program: {}", program);
-	println!("=> {:?}", output);
+  let program = format!(
+    "\n(do\n  ; programs are wrapped in a do-block\n{}\n)",
+    program
+  );
+  let program = program.as_str();
+  let mut tokens = tokenize(program);
+  // println!("tokens are: {:?}", tokens);
+  let ast = parser(&mut tokens);
+  // println!("AST: {:?}", ast);
+  let output = eval(&ast, &env, &pstore);
+  println!("Program: {}", program);
+  println!("=> {:?}", output);
 }
 
 fn main() {
-	// build dynamic env and procedure store
+  // build dynamic env and procedure store
   let dynamic_env = Rc::new(RefCell::new(DynamicEnv {
     env: HashMap::new(),
     parent: Rc::new(None),
   }));
   let pstore = Rc::new(RefCell::new(Vec::new()));
 
-	// parse args & run
-	let args: Vec<_> = env::args().collect();
-	if args.len() > 1 && args[1] == "repl" {
-		repl(&dynamic_env, &pstore);
-	} else {
-		driver(&dynamic_env, &pstore);
-	}
+  // parse args & run
+  let args: Vec<_> = env::args().collect();
+  if args.len() > 1 && args[1] == "repl" {
+    repl(&dynamic_env, &pstore);
+  } else {
+    driver(&dynamic_env, &pstore);
+  }
 }
