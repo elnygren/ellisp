@@ -18,6 +18,8 @@ Special syntactic forms start with a keyword, everything else is a procedure cal
 "set!"    (set! a <expr>)             (set! a 6)
 "quote"   (quote <expr>)              (quote (hello darkness (my old) friend))
 "lambda"  (lambda (a b) <expr>)       (def fn (lambda (a, b) (+ a b)))
+
+; oh and this would be a comment, it's a total regexp hack in the tokenizer
 ```
 
 ### Procedures
@@ -28,7 +30,7 @@ Note: some functions take N arguments where it makes sense (as in Clojure).
 
 ```
 +   (+ 1 2 3 4)
--   (- 1 2 3 4) ; =>
+-   (- 1 2 3 4)
 =   (= true false true)
 <   (< 1 2 3 4) ; => true
 do  (do <expr1> <expr2> ... <final-expr>) ; => returns result of final expr
