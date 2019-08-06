@@ -62,19 +62,22 @@ impl<'a> DynamicEnv<'a> {
   }
 }
 
+/// Story a lambda's body's AST and the param names
+/// so we can look them up when the lambda is called at `fn lambda_call`
+/// where we eval the body with an environment that has the arguments
+/// set to their corresponding param_names
 #[derive(Debug)]
 struct LambdaContext {
   body: AST,
   param_names: Vec<String>,
-  param_values: Vec<Expr>,
 }
 
 impl LambdaContext {
+	/// Copy the body's AST tree and take ownership of function param names
   fn new(body: &AST, param_names: Vec<String>) -> LambdaContext {
     return LambdaContext {
       body: body.clone(),
       param_names: param_names,
-      param_values: Vec::new(),
     };
   }
 }
