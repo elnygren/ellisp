@@ -73,7 +73,7 @@ struct LambdaContext {
 }
 
 impl LambdaContext {
-	/// Copy the body's AST tree and take ownership of function param names
+  /// Copy the body's AST tree and take ownership of function param names
   fn new(body: &AST, param_names: Vec<String>) -> LambdaContext {
     return LambdaContext {
       body: body.clone(),
