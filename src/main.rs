@@ -272,6 +272,20 @@ fn eval(
                 _ => panic!("`if` requires a boolean test value"),
               };
             }
+            "set!" => {
+              let (symbol, exp) = (&children[1], &children[2]);
+              let key = match symbol
+                .atom
+                .as_ref()
+                .expect("error: set! expects aa symbol as first arg")
+              {
+                Atom::Symbol(s) => s,
+                _ => panic!("error: set! expects a symbol as first arg"),
+              };
+              let value = eval(exp, denv, pstore);
+              let _ = denv.borrow_mut().env.insert(key.to_string(), value);
+              return Expr::Nop;
+            }
             "lambda" => {
               let arg_names = &children[1]
                 .children
@@ -334,7 +348,9 @@ fn driver(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>
   (def c (24))
   (def d -24)
   (def result-1 (+ (a 2) (b 666) c d))
-  (do result-1)
+  (do
+    (set! result-1 666)
+    result-1)
   ; (def fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
   ; (fib 4)
   ";
