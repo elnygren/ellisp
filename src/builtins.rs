@@ -1,6 +1,6 @@
 use crate::types::Expr;
 
-pub fn ellisp_sum(args: Vec<Expr>) -> Expr {
+pub fn ellisp_sum(args: &Vec<Expr>) -> Expr {
   let mut sum = 0;
   for v in args {
     match v {
@@ -11,7 +11,7 @@ pub fn ellisp_sum(args: Vec<Expr>) -> Expr {
   return Expr::Number(sum);
 }
 
-pub fn ellisp_minus(args: Vec<Expr>) -> Expr {
+pub fn ellisp_minus(args: &Vec<Expr>) -> Expr {
   let mut acc = match args[0] {
     Expr::Number(n) => n,
     _ => panic!("minus is only defined for numbers"),
@@ -25,12 +25,12 @@ pub fn ellisp_minus(args: Vec<Expr>) -> Expr {
   return Expr::Number(acc);
 }
 
-pub fn ellisp_begin(args: Vec<Expr>) -> Expr {
+pub fn ellisp_begin(args: &Vec<Expr>) -> Expr {
   // TODO: can we not clone here ?
   return args.last().expect("do block received invalid data").clone();
 }
 
-pub fn ellisp_smaller_than(args: Vec<Expr>) -> Expr {
+pub fn ellisp_smaller_than(args: &Vec<Expr>) -> Expr {
   let args: Vec<&i32> = args
     .iter()
     .map(|expr| match expr {
@@ -47,7 +47,7 @@ pub fn ellisp_smaller_than(args: Vec<Expr>) -> Expr {
   return Expr::Bool(true);
 }
 
-pub fn ellisp_equal(args: Vec<Expr>) -> Expr {
+pub fn ellisp_equal(args: &Vec<Expr>) -> Expr {
   let result = args.iter().all(|x| match (x, &args[0]) {
     (Expr::Number(curr), Expr::Number(first)) => first == curr,
     (Expr::Bool(curr), Expr::Bool(first)) => first == curr,

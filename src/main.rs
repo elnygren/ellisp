@@ -26,8 +26,7 @@ type Token = String;
 /// Per-procedure (lambda) environmnts link to their parent
 #[derive(Debug)]
 struct DynamicEnv<'a> {
-  // parent: Option<DynamicEnv>,
-  parent: Rc<Option<&'a DynamicEnv<'a>>>,
+  parent: Option<Rc<RefCell<DynamicEnv<'a>>>>,
   env: HashMap<String, Expr>,
 }
 
@@ -40,7 +39,13 @@ impl<'a> DynamicEnv<'a> {
     match v {
       Some(v) => v.clone(),
       None => {
-        return self.parent.unwrap().find(key);
+        return self
+          .parent
+          .as_ref()
+          .expect("error: DynamicEnv does not have a parent")
+          .try_borrow()
+          .expect("error: symbol not found")
+          .find(key);
       }
     }
   }
@@ -52,15 +57,15 @@ impl<'a> DynamicEnv<'a> {
 /// set to their corresponding param_names
 #[derive(Debug)]
 struct LambdaContext {
-  body: AST,
+  body: Rc<AST>,
   param_names: Vec<String>,
 }
 
 impl LambdaContext {
   /// Copy the body's AST tree and take ownership of function param names
-  fn new(body: &AST, param_names: Vec<String>) -> LambdaContext {
+  fn new(body: &Rc<AST>, param_names: Vec<String>) -> LambdaContext {
     return LambdaContext {
-      body: body.clone(),
+      body: Rc::clone(body),
       param_names: param_names,
     };
   }
@@ -110,12 +115,12 @@ fn parser(tokens: &mut Vec<Token>) -> AST {
     "(" => {
       let mut l = Vec::new();
       while tokens[0] != ")" {
-        l.push(parser(tokens));
+        l.push(Rc::new(parser(tokens)));
       }
       tokens.remove(0);
       return AST {
         atom: None,
-        children: Some(Box::new(l)),
+        children: Some(l),
       };
     }
     ")" => panic!("unexpected `)`"),
@@ -124,64 +129,7 @@ fn parser(tokens: &mut Vec<Token>) -> AST {
       children: None,
     },
   };
-
   return results;
-}
-
-/// helper for eval
-/// perform a lambda call using a local environment
-fn lambda_call(
-  args: &Vec<Expr>,
-  denv: &Rc<RefCell<DynamicEnv>>,
-  pstore: &Rc<RefCell<LambdaContextStore>>,
-  lambda_id: usize,
-) -> Expr {
-  // println!("lambda call {:? }{:?}", args, pstore);
-  let ctx = &pstore
-    .try_borrow()
-    .expect("error: mut borrowing pstore at lambda_call failed")[lambda_id];
-
-  let mut local_env = HashMap::new();
-  for (arg_name, arg_value) in izip!(&ctx.param_names, args) {
-    local_env.insert(arg_name.to_string(), arg_value.clone());
-  }
-
-  let denv = denv
-    .try_borrow()
-    .expect("error: borrowing denv at lambda_call failed");
-  let denv = Rc::new(RefCell::new(DynamicEnv {
-    env: local_env,
-    parent: Rc::new(Some(&denv)),
-  }));
-  return eval(&ctx.body, &denv, pstore);
-}
-
-/// helper for eval
-/// evaluates a proc and all of it's arguments and then calls it
-fn proc_call(
-  ast: &AST,
-  denv: &Rc<RefCell<DynamicEnv>>,
-  pstore: &Rc<RefCell<LambdaContextStore>>,
-  first: &AST,
-) -> Expr {
-  let proc: Expr = eval(&first, denv, pstore);
-  let mut args: Vec<Expr> = Vec::new();
-  for arg in ast
-    .children
-    .as_ref()
-    .expect("error at proc_call")
-    .iter()
-    .skip(1)
-  {
-    let evalued_arg = eval(&arg, denv, pstore);
-    args.push(evalued_arg);
-  }
-
-  return match proc {
-    Expr::Function(f) => f(args),
-    Expr::LambdaId(lambda_id) => lambda_call(&args, denv, pstore, lambda_id),
-    _ => panic!("Expected Expr::Function"),
-  };
 }
 
 /// Eval processes the AST into experssions and evaluates them
@@ -189,140 +137,151 @@ fn proc_call(
 /// to (proc arg1 arg2 ... argN) form and just call the function corresponding to proc
 /// eg. (sum 1 2 3 ... N) -> sum([1,2,3...N]) (in rust)
 fn eval(
-  ast: &AST,
-  denv: &Rc<RefCell<DynamicEnv>>,
-  pstore: &Rc<RefCell<LambdaContextStore>>,
+	// we have refences to the program's AST and to lambda ASTs stored in LambdaContextStore
+  arg_ast: Rc<AST>,
+	// each per-Procedure env points to their parent env, Rc to keeps track of those references
+  arg_denv: Rc<RefCell<DynamicEnv>>,
+  pstore: &mut LambdaContextStore,
 ) -> Expr {
-  // println!("eval called: \n	{:?}\n	{:?}", ast, denv);
-  match &ast.atom {
-    // we are processing an AST Atom; a leaf of the AST
-    // if the Atom is a Number/Bool, then it's a Number/Bool expression
-    // if it's a symbol:
-    // 	a) try to find the atom from ellisp static environment
-    // 	b) TODO: try to find the atom from ellisp dynamic environment
-    Some(atom) => match atom {
-      Atom::Symbol(x) => match x.as_str() {
-        // static env
-        "sum" => Expr::Function(ellisp_sum),
-        "+" => Expr::Function(ellisp_sum),
-        "-" => Expr::Function(ellisp_minus),
-        "begin" => Expr::Function(ellisp_begin),
-        "do" => Expr::Function(ellisp_begin),
-        "=" => Expr::Function(ellisp_equal),
-        "<" => Expr::Function(ellisp_smaller_than),
-        // dynamic env
-        _ => {
-          return denv
-            .try_borrow()
-            .expect("error: borrowing denv failed")
-            .find(x.as_str());
-        }
-      },
-      Atom::Number(x) => Expr::Number(*x),
-      Atom::Bool(x) => Expr::Bool(*x),
-    },
+	// println!("eval called (recur): {}", arg_ast);
+
+  let mut ast = arg_ast;
+  let mut denv = arg_denv;
+
+  loop {
+    // println!("eval called (loop): {}", ast);
+    if ast.atom.is_some() {
+      // we are processing an AST Atom; a leaf of the AST
+      // if the Atom is a Number/Bool, then it's a Number/Bool expression
+      // if it's a symbol:
+      // 	a) try to find the atom from ellisp static environment
+      // 	b) TODO: try to find the atom from ellisp dynamic environment
+      return match &ast.atom.as_ref().expect("error: atom should always be `some` here.") {
+        Atom::Symbol(x) => match x.as_str() {
+          // static env
+          "sum" => Expr::Function(ellisp_sum),
+          "+" => Expr::Function(ellisp_sum),
+          "-" => Expr::Function(ellisp_minus),
+          "begin" => Expr::Function(ellisp_begin),
+          "do" => Expr::Function(ellisp_begin),
+          "=" => Expr::Function(ellisp_equal),
+          "<" => Expr::Function(ellisp_smaller_than),
+          // dynamic env
+          _ => {
+            return denv.try_borrow().expect("error: borrowing denv failed").find(x.as_str());
+          }
+        },
+        Atom::Number(x) => Expr::Number(*x),
+        Atom::Bool(x) => Expr::Bool(*x),
+      };
+    };
+
+    // AST node is *not* an atom:
 
     // We are processing a full expression, eg. (sum 1 2) of the form
     // (proc arg1 arg2 arg3 ... )
     // every argN can be a full expression or a single atom; both are checked recursively
-    None => {
-      let children = ast.children.as_ref().expect("error: children is None");
-      let first = &children[0];
+    let children = ast.children.as_ref().expect("error: children is None");
+    let first = &children[0];
 
-      // println!("else block, first {:?} rest {:?}", first, ast.children.as_ref().unwrap());
+    if first.is_keyword("def") || first.is_keyword("define") {
+			let (name, expr) = (&children[1], &children[2]);
+      let name = name.get_atom_symbol("error: `def` expects a symbol & expr, eg; (def a 5).");
+      let res = eval(Rc::clone(expr), Rc::clone(&denv), pstore);
+      denv.borrow_mut().env.insert(name, res);
+      return Expr::Nop;
+    } else if first.is_keyword("if") {
+      let test = &ast.children.as_ref().expect("error: if-form requires a test expr")[1];
+      match eval(Rc::clone(test), Rc::clone(&denv), pstore) {
+        Expr::Bool(b) => {
+          if b {
+            ast = Rc::clone(&ast.children.as_ref().expect("error: if-form requires a then expr")[2]);
+          } else {
+            ast = Rc::clone(&ast.children.as_ref().expect("error: if-form requires an else expr")[3]);
+          }
+        }
+        _ => panic!("`if` requires a boolean test value"),
+      }
+    } else if first.is_keyword("set!") {
+      let (symbol, exp) = (&children[1], &children[2]);
+      let key = symbol.get_atom_symbol("error: set! expects a symbol as first arg");
+      let value = eval(Rc::clone(exp), Rc::clone(&denv), pstore);
+      denv.borrow_mut().env.insert(key, value);
+      return Expr::Nop;
+    } else if first.is_keyword("quote") {
+      return Expr::Sexp((*children[1]).clone());
+    } else if first.is_keyword("lambda") {
+      // store lambda's AST body & arg_names for later (re)use
+			// we clone data here because LambdaContext stores lambda bodies after the entire AST has been freed
+			// for example, in repl each input is a new AST but we still want to have our old lambdas
+      let arg_names: Vec<String> = children[1]
+        .children
+        .as_ref()
+        .expect("error: unwrapping lambda arg_names failed")
+        .iter()
+        .map(|node| node.get_atom_symbol("error: lambda expects symbols as arg names"))
+        .collect();
+      let body = children[2].clone();
+      pstore.push(LambdaContext::new(&body, arg_names));
+      return Expr::LambdaId(pstore.len() - 1);
+    } else {
+      // proc call
+      let mut exprs: Vec<Expr> = ast
+        .children
+        .as_ref()
+        .expect("error: proc_call expected AST node children")
+        .iter()
+        .map(|node| eval(Rc::clone(node), Rc::clone(&denv), pstore))
+        .collect();
+      let proc = exprs.remove(0);
 
-      return match first.atom.as_ref() {
-        None => proc_call(&ast, denv, pstore, &first),
-        Some(atom) => match atom {
-          Atom::Symbol(sym) => match sym.as_str() {
-            "def" => {
-              let (name, expr) = (&children[1], &children[2]);
-              let name =
-                name.get_atom_symbol("error: `def` expects a symbol & expr, eg; (def a 5).");
-              let res = eval(&expr, denv, pstore);
-              denv.borrow_mut().env.insert(name, res);
-              return Expr::Nop;
-            }
-            "if" => {
-              let (test, then, alt) = (&children[1], &children[2], &children[3]);
-              return match eval(&test, denv, pstore) {
-                Expr::Bool(b) => {
-                  if b {
-                    eval(&then, denv, pstore)
-                  } else {
-                    eval(&alt, denv, pstore)
-                  }
-                }
-                _ => panic!("`if` requires a boolean test value"),
-              };
-            }
-            "set!" => {
-              let (symbol, exp) = (&children[1], &children[2]);
-              let key = symbol.get_atom_symbol("error: set! expects a symbol as first arg");
-              let value = eval(exp, denv, pstore);
-              denv.borrow_mut().env.insert(key, value);
-              return Expr::Nop;
-            }
-            "quote" => {
-              let sexp = &children[1];
-              return Expr::Sexp(sexp.clone());
-            }
-            "lambda" => {
-              let arg_names: Vec<String> = children[1]
-                .children
-                .as_ref()
-                .expect("error: unwrapping lambda arg_names failed")
-                .iter()
-                .map(|node| node.get_atom_symbol("error: lambda expects symbols as arg names"))
-                .collect();
+			// hack: grab the output from match and return if Some(x), else continue iteration
+      let res = match proc {
+        Expr::Function(f) => Some(f(&exprs)),
+        Expr::LambdaId(lambda_id) => {
+          // println!("lambda call {:? }{:?}", args, pstore);
+          let ctx = &pstore[lambda_id];
+          let mut local_env = HashMap::new();
+					// TODO: here check that the lists are equal length!!
+          for (arg_name, arg_value) in izip!(&ctx.param_names, exprs) {
+            local_env.insert(arg_name.to_string(), arg_value.clone());
+          }
 
-              let body = &children[2];
+          denv = Rc::new(RefCell::new(DynamicEnv {
+            env: local_env,
+            parent: Some(Rc::clone(&denv)),
+          }));
 
-              {
-                // store lambda's AST body & arg_names for later (re)use
-                pstore
-                  .try_borrow_mut()
-                  .expect("error: mut borrowing pstore at lambda form failed")
-                  .push(LambdaContext::new(&body, arg_names));
-              }
-
-              return Expr::LambdaId(
-                pstore
-                  .try_borrow()
-                  .expect("error: borrowing pstore at lambda form failed")
-                  .len()
-                  - 1,
-              );
-            }
-            _ => proc_call(&ast, denv, pstore, &first),
-          },
-          // Note: these might be dangerous but now they accomplish that
-          // `(true)` is same as `true` amd `(1)` is `1`
-          // eg. `(def a (true))` or `(lambda () (true))` work...
-          Atom::Number(x) => Expr::Number(*x),
-          Atom::Bool(x) => Expr::Bool(*x),
-        },
+					ast = Rc::clone(&pstore[lambda_id].body);
+          None
+        }
+        _ => panic!("Expected Expr::Function"),
       };
+
+      if res.is_some() {
+        return res.unwrap();
+      }
     }
-  }
+  } // loop
 }
 
 /// the iconic lisp repl
-fn repl(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>>) {
+fn repl(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
   print!("ellisp 0.1 REPL\n\n> ");
   let _ = io::stdout().flush();
   let stdin = io::stdin();
   let stdin_lock = stdin.lock();
+
   stdin_lock.lines().filter_map(|l| l.ok()).for_each(|s| {
     let ast = parser(&mut tokenize(s.as_str()));
-    let out = eval(&ast, env, pstore);
+    let out = eval(Rc::new(ast), Rc::clone(&env), pstore);
     print!("{}\n> ", print_output(out));
     let _ = io::stdout().flush();
   });
 }
 
 /// quick & dirty way to run some program
-fn driver(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>>) {
+fn driver(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
   let program = "
   ; def + lambdas
   ; (def a (lambda (x) (+ x 40)))
@@ -335,8 +294,12 @@ fn driver(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>
     ; result-1)
 	;(quote (well hello (there darkness) my old friend))
   ;(a (a 20))
-  (def fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
-	(fib 30)
+  ;(define (sum-to n) (if (= n 0) 0 (+ n (sum-to (- n 1)))))
+	;(fib 30)
+	(define sum-to (lambda (n) (if (= n 0) 0 (+ n (sum-to (- n 1))))))
+	(define sum2 (lambda (n acc) (if (= n 0) acc (sum2 (- n 1) (+ n acc)))))
+	;(sum-to 10000)
+	(sum2 1000 0)
   ";
 
   let program = format!(
@@ -348,7 +311,7 @@ fn driver(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>
   // println!("tokens are: {:?}", tokens);
   let ast = parser(&mut tokens);
   // println!("AST: {:?}", ast);
-  let out = eval(&ast, &env, &pstore);
+  let out = eval(Rc::new(ast), env, pstore);
   println!("Program: {}", program);
   print!("{}\n> ", print_output(out));
 }
@@ -357,15 +320,15 @@ fn main() {
   // build dynamic env and procedure store
   let dynamic_env = Rc::new(RefCell::new(DynamicEnv {
     env: HashMap::new(),
-    parent: Rc::new(None),
+    parent: None,
   }));
-  let pstore = Rc::new(RefCell::new(Vec::new()));
+	let mut pstore = Vec::new();
 
   // parse args & run
   let args: Vec<_> = env::args().collect();
   if args.len() > 1 && args[1] == "repl" {
-    repl(&dynamic_env, &pstore);
+    repl(dynamic_env, &mut pstore);
   } else {
-    driver(&dynamic_env, &pstore);
+    driver(dynamic_env, &mut pstore);
   }
 }
