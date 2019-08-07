@@ -8,9 +8,11 @@ use std::rc::Rc;
 
 mod builtins;
 mod types;
+mod utils;
 
 use builtins::{ellisp_begin, ellisp_equal, ellisp_minus, ellisp_smaller_than, ellisp_sum};
-use types::Expr;
+use types::{Atom, Expr, AST};
+use utils::print_output;
 
 #[macro_use]
 extern crate itertools;
@@ -20,27 +22,9 @@ extern crate itertools;
 /// and then atomized by our parser `Token => Atom`
 type Token = String;
 
-/// Atom
-/// parser produces an AST of Atoms
-#[derive(Debug, Clone)]
-enum Atom {
-  Bool(bool),
-  Symbol(String),
-  Number(i32),
-  // TODO: support doubles, strings... ?
-}
-
-/// AST Node is either a single Atom, eg. `Atom::Number(1)` or `Atom::Symbol("sum")`
-/// or a list of Atoms: (following is just some pseudo code) `AST["sum", 1, 2, AST["sum", 1, 2]]`
-#[derive(Debug, Clone)]
-struct AST {
-  atom: Option<Atom>,
-  children: Option<Box<Vec<AST>>>,
-}
-
 /// Dynamic Environment contains all user defined symbols
 /// Per-procedure (lambda) environmnts link to their parent
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct DynamicEnv<'a> {
   // parent: Option<DynamicEnv>,
   parent: Rc<Option<&'a DynamicEnv<'a>>>,
@@ -54,7 +38,7 @@ impl<'a> DynamicEnv<'a> {
   fn find(&self, key: &str) -> Expr {
     let v = self.env.get(key);
     match v {
-      Some(v) => *v,
+      Some(v) => v.clone(),
       None => {
         return self.parent.unwrap().find(key);
       }
@@ -153,14 +137,14 @@ fn lambda_call(
   lambda_id: usize,
 ) -> Expr {
   // println!("lambda call {:? }{:?}", args, pstore);
-  let ctx = &pstore.borrow_mut()[lambda_id];
+  let ctx = &pstore.try_borrow().expect("error: mut borrowing pstore at lambda_call failed")[lambda_id];
 
   let mut local_env = HashMap::new();
   for (arg_name, arg_value) in izip!(&ctx.param_names, args) {
-    local_env.insert(arg_name.to_string(), *arg_value);
+    local_env.insert(arg_name.to_string(), arg_value.clone());
   }
 
-  let denv = denv.try_borrow().unwrap();
+  let denv = denv.try_borrow().expect("error: borrowing denv at lambda_call failed");
   let denv = Rc::new(RefCell::new(DynamicEnv {
     env: local_env,
     parent: Rc::new(Some(&denv)),
@@ -224,7 +208,10 @@ fn eval(
         "<" => Expr::Function(ellisp_smaller_than),
         // dynamic env
         _ => {
-          return denv.borrow().find(x.as_str());
+          return denv
+            .try_borrow()
+            .expect("error: borrowing denv failed")
+            .find(x.as_str());
         }
       },
       Atom::Number(x) => Expr::Number(*x),
@@ -286,6 +273,10 @@ fn eval(
               let _ = denv.borrow_mut().env.insert(key.to_string(), value);
               return Expr::Nop;
             }
+            "quote" => {
+              let sexp = &children[1];
+              return Expr::Sexp(sexp.clone());
+            }
             "lambda" => {
               let arg_names = &children[1]
                 .children
@@ -308,9 +299,16 @@ fn eval(
                 .collect();
 
               pstore
-                .borrow_mut()
+                .try_borrow_mut()
+								.expect("error: mut borrowing pstore at lambda form failed")
                 .push(LambdaContext::new(&body, arg_names));
-              return Expr::LambdaId(pstore.borrow().len() - 1);
+              return Expr::LambdaId(
+                pstore
+                  .try_borrow()
+                  .expect("error: borrowing pstore at lambda form failed")
+                  .len()
+                  - 1,
+              );
             }
             _ => proc_call(&ast, denv, pstore, &first),
           },
@@ -334,7 +332,7 @@ fn repl(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>>)
   stdin_lock.lines().filter_map(|l| l.ok()).for_each(|s| {
     let ast = parser(&mut tokenize(s.as_str()));
     let out = eval(&ast, env, pstore);
-    print!("{:?}\n> ", out);
+    print!("{}\n> ", print_output(out));
     let _ = io::stdout().flush();
   });
 }
@@ -343,16 +341,18 @@ fn repl(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>>)
 fn driver(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>>) {
   let program = "
   ; def + lambdas
-  (def a (lambda (x) (+ x 40)))
-  (def b (lambda (x) (+ 0 2)))
-  (def c (24))
-  (def d -24)
-  (def result-1 (+ (a 2) (b 666) c d))
-  (do
-    (set! result-1 666)
-    result-1)
-  ; (def fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
-  ; (fib 4)
+  ; (def a (lambda (x) (+ x 40)))
+  ; (def b (lambda (x) (+ 0 2)))
+  ; (def c (24))
+  ; (def d -24)
+  ; (def result-1 (+ (a 2) (b 666) c d))
+  ; (do
+    ; (set! result-1 666)
+    ; result-1)
+	;(quote (well hello (there darkness) my old friend))
+  ;(a (a 20))
+  (def fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
+	(fib 3)
   ";
 
   let program = format!(
@@ -364,9 +364,9 @@ fn driver(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>
   // println!("tokens are: {:?}", tokens);
   let ast = parser(&mut tokens);
   // println!("AST: {:?}", ast);
-  let output = eval(&ast, &env, &pstore);
+  let out = eval(&ast, &env, &pstore);
   println!("Program: {}", program);
-  println!("=> {:?}", output);
+  print!("{}\n> ", print_output(out));
 }
 
 fn main() {

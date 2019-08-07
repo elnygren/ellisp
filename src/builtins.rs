@@ -27,8 +27,8 @@ pub fn ellisp_minus(args: Vec<Expr>) -> Expr {
 }
 
 pub fn ellisp_begin(args: Vec<Expr>) -> Expr {
-  let expr: Expr = *args.last().expect("do block received invalid data");
-  return expr;
+  // TODO: can we not clone here ?
+  return args.last().expect("do block received invalid data").clone();
 }
 
 pub fn ellisp_smaller_than(args: Vec<Expr>) -> Expr {
@@ -49,9 +49,9 @@ pub fn ellisp_smaller_than(args: Vec<Expr>) -> Expr {
 }
 
 pub fn ellisp_equal(args: Vec<Expr>) -> Expr {
-  let result = args.iter().all(|x| match (x, args[0]) {
-    (Expr::Number(curr), Expr::Number(first)) => first == *curr,
-    (Expr::Bool(curr), Expr::Bool(first)) => first == *curr,
+  let result = args.iter().all(|x| match (x, &args[0]) {
+    (Expr::Number(curr), Expr::Number(first)) => first == curr,
+    (Expr::Bool(curr), Expr::Bool(first)) => first == curr,
     _ => false,
   });
 
