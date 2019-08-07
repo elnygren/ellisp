@@ -137,14 +137,18 @@ fn lambda_call(
   lambda_id: usize,
 ) -> Expr {
   // println!("lambda call {:? }{:?}", args, pstore);
-  let ctx = &pstore.try_borrow().expect("error: mut borrowing pstore at lambda_call failed")[lambda_id];
+  let ctx = &pstore
+    .try_borrow()
+    .expect("error: mut borrowing pstore at lambda_call failed")[lambda_id];
 
   let mut local_env = HashMap::new();
   for (arg_name, arg_value) in izip!(&ctx.param_names, args) {
     local_env.insert(arg_name.to_string(), arg_value.clone());
   }
 
-  let denv = denv.try_borrow().expect("error: borrowing denv at lambda_call failed");
+  let denv = denv
+    .try_borrow()
+    .expect("error: borrowing denv at lambda_call failed");
   let denv = Rc::new(RefCell::new(DynamicEnv {
     env: local_env,
     parent: Rc::new(Some(&denv)),
@@ -233,17 +237,10 @@ fn eval(
           Atom::Symbol(sym) => match sym.as_str() {
             "def" => {
               let (name, expr) = (&children[1], &children[2]);
-              match name
-                .atom
-                .as_ref()
-                .expect("error: `def` has wrong amount of args")
-              {
-                Atom::Symbol(name) => {
-                  let res = eval(&expr, denv, pstore);
-                  denv.borrow_mut().env.insert(name.to_string(), res);
-                }
-                _ => panic!("def first arg must be a symbol!"),
-              }
+              let name =
+                name.get_atom_symbol("error: `def` expects a symbol & expr, eg; (def a 5).");
+              let res = eval(&expr, denv, pstore);
+              denv.borrow_mut().env.insert(name, res);
               return Expr::Nop;
             }
             "if" => {
@@ -261,16 +258,9 @@ fn eval(
             }
             "set!" => {
               let (symbol, exp) = (&children[1], &children[2]);
-              let key = match symbol
-                .atom
-                .as_ref()
-                .expect("error: set! expects aa symbol as first arg")
-              {
-                Atom::Symbol(s) => s,
-                _ => panic!("error: set! expects a symbol as first arg"),
-              };
+              let key = symbol.get_atom_symbol("error: set! expects a symbol as first arg");
               let value = eval(exp, denv, pstore);
-              let _ = denv.borrow_mut().env.insert(key.to_string(), value);
+              denv.borrow_mut().env.insert(key, value);
               return Expr::Nop;
             }
             "quote" => {
@@ -278,30 +268,24 @@ fn eval(
               return Expr::Sexp(sexp.clone());
             }
             "lambda" => {
-              let arg_names = &children[1]
+              let arg_names: Vec<String> = children[1]
                 .children
                 .as_ref()
-                .expect("error: unwrapping lambda arg_names failed");
-              let body = &children[2];
-
-              let arg_names: Vec<String> = arg_names
+                .expect("error: unwrapping lambda arg_names failed")
                 .iter()
-                .map(|node| {
-                  match node
-                    .atom
-                    .as_ref()
-                    .expect("error: unwrapping lambda arg_name failed")
-                  {
-                    Atom::Symbol(s) => s.to_string(),
-                    _ => panic!("error: lambda's argument name is not a Symbol"),
-                  }
-                })
+                .map(|node| node.get_atom_symbol("error: lambda expects symbols as arg names"))
                 .collect();
 
-              pstore
-                .try_borrow_mut()
-								.expect("error: mut borrowing pstore at lambda form failed")
-                .push(LambdaContext::new(&body, arg_names));
+              let body = &children[2];
+
+              {
+                // store lambda's AST body & arg_names for later (re)use
+                pstore
+                  .try_borrow_mut()
+                  .expect("error: mut borrowing pstore at lambda form failed")
+                  .push(LambdaContext::new(&body, arg_names));
+              }
+
               return Expr::LambdaId(
                 pstore
                   .try_borrow()
@@ -352,7 +336,7 @@ fn driver(env: &Rc<RefCell<DynamicEnv>>, pstore: &Rc<RefCell<LambdaContextStore>
 	;(quote (well hello (there darkness) my old friend))
   ;(a (a 20))
   (def fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
-	(fib 3)
+	(fib 30)
   ";
 
   let program = format!(
