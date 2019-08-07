@@ -2,15 +2,39 @@
 
 ellisp is a lisp parser &amp; interpreter made with Rust for fun.
 
-## How does it work?
+## Language
 
-1. Program code (string) is tokenised `fn tokenize(p: &str) -> Vec<Token>`
- * just some simple string processing
-2. Tokens are parsed into the AST `fn parser(tokens: &mut Vec<Token>) -> AST`
- * recursive algorithm that checks for `(` and `)`, it's a LISP afterall :-)
-3. AST is evaluated `fn eval(ast: &AST, denv: &mut Box<DynamicEnv>, pstore: &mut LambdaContextStore) -> Expr`
- * DynamicEnv contains all runtime definitions like `(def a 5)`. Each procedure (lambda) has it's own environment that extends the top-level env
- * LambdaContextStore contains data required to execute a procedure (lambda)
+The language is a Lisp with s-expressions that must follow our defined *special forms* or *procedure calls*.
+An s-expression starting with a keyword is a *special form*, other lists are *procedure calls* (function calls).
+ellisp also supports booleans (`true` and `false`) and numbers (integers).
+
+### Syntactic forms
+
+Special syntactic forms start with a keyword, everything else is a procedure call.
+
+```
+"def"     (def a <expr>)              (def a 42)
+"if"      (if <expr> <then> <else>)   (if (= a 5) 1 0)
+"set!"    (set! a <expr>)             (set! a 6)
+"quote"   (quote <expr>)              (quote (hello darkness (my old) friend))
+"lambda"  (lambda (a b) <expr>)       (def fn (lambda (a, b) (+ a b)))
+
+; oh and this would be a comment, it's a total regexp hack in the tokenizer
+```
+
+### Procedures
+
+ellisp provides a standard library. User's can extend and/or override these with `def` and `set!`.
+
+Note: some functions take N arguments where it makes sense (as in Clojure).
+
+```
++   (+ 1 2 3 4)
+-   (- 1 2 3 4)
+=   (= true false true)
+<   (< 1 2 3 4) ; => true
+do  (do <expr1> <expr2> ... <final-expr>) ; => returns result of final expr
+```
 
 ### REPL example
 
@@ -61,3 +85,13 @@ let output = eval(&ast, &mut dynamic_env, &mut pstore);
 println!("Program: {}", program);
 println!("=> {:?}", output)
 ```
+
+## How does it work?
+
+1. Program code (string) is tokenised `fn tokenize(p: &str) -> Vec<Token>`
+ * just some simple string processing
+2. Tokens are parsed into the AST `fn parser(tokens: &mut Vec<Token>) -> AST`
+ * recursive algorithm that checks for `(` and `)`, it's a LISP afterall :-)
+3. AST is evaluated `fn eval(ast: &AST, denv: &mut Box<DynamicEnv>, pstore: &mut LambdaContextStore) -> Expr`
+ * DynamicEnv contains all runtime definitions like `(def a 5)`. Each procedure (lambda) has it's own environment that extends the top-level env
+ * LambdaContextStore contains data required to execute a procedure (lambda)
