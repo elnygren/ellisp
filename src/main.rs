@@ -54,21 +54,11 @@ impl<'a> DynamicEnv<'a> {
 /// Story a lambda's body's AST and the param names
 /// so we can look them up when the lambda is called at `fn lambda_call`
 /// where we eval the body with an environment that has the arguments
-/// set to their corresponding param_names
+/// set to their corresponding arg_names
 #[derive(Debug)]
 struct LambdaContext {
   body: Rc<AST>,
-  param_names: Vec<String>,
-}
-
-impl LambdaContext {
-  /// Copy the body's AST tree and take ownership of function param names
-  fn new(body: &Rc<AST>, param_names: Vec<String>) -> LambdaContext {
-    return LambdaContext {
-      body: Rc::clone(body),
-      param_names: param_names,
-    };
-  }
+  arg_names: Vec<String>,
 }
 
 type LambdaContextStore = Vec<LambdaContext>;
@@ -222,7 +212,7 @@ fn eval(
         .map(|node| node.get_atom_symbol("error: lambda expects symbols as arg names"))
         .collect();
       let body = children[2].clone();
-      pstore.push(LambdaContext::new(&body, arg_names));
+      pstore.push(LambdaContext { body: Rc::clone(&body), arg_names: arg_names });
       return Expr::LambdaId(pstore.len() - 1);
     } else {
       // proc call
@@ -242,8 +232,8 @@ fn eval(
           // println!("lambda call {:? }{:?}", args, pstore);
           let ctx = &pstore[lambda_id];
           let mut local_env = HashMap::new();
-					// TODO: here check that the lists are equal length!!
-          for (arg_name, arg_value) in izip!(&ctx.param_names, exprs) {
+					// TODO: here check that the lists are equal length!
+          for (arg_name, arg_value) in izip!(&ctx.arg_names, exprs) {
             local_env.insert(arg_name.to_string(), arg_value.clone());
           }
 
