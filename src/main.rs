@@ -147,11 +147,7 @@ fn eval(
       // if it's a symbol:
       // 	a) try to find the atom from ellisp static environment
       // 	b) TODO: try to find the atom from ellisp dynamic environment
-      return match &ast
-        .atom
-        .as_ref()
-        .expect("error: atom should always be `some` here.")
-      {
+      return match &ast.atom.as_ref().unwrap() {
         Atom::Symbol(x) => match x.as_str() {
           // static env
           "sum" => Expr::Function(ellisp_sum),
@@ -175,7 +171,6 @@ fn eval(
     };
 
     // AST node is *not* an atom:
-
     // We are processing a full expression, eg. (sum 1 2) of the form
     // (proc arg1 arg2 arg3 ... )
     // every argN can be a full expression or a single atom; both are checked recursively
@@ -189,28 +184,12 @@ fn eval(
       denv.borrow_mut().data.insert(name, res);
       return Expr::Nop;
     } else if first.is_keyword("if") {
-      let test = &ast
-        .children
-        .as_ref()
-        .expect("error: if-form requires a test expr")[1];
+      let (test, then, alt) = (&children[1], &children[2], &children[3]);
       match eval(Rc::clone(test), Rc::clone(&denv), pstore) {
-        Expr::Bool(b) => {
-          if b {
-            ast = Rc::clone(
-              &ast
-                .children
-                .as_ref()
-                .expect("error: if-form requires a then expr")[2],
-            );
-          } else {
-            ast = Rc::clone(
-              &ast
-                .children
-                .as_ref()
-                .expect("error: if-form requires an else expr")[3],
-            );
-          }
-        }
+        Expr::Bool(b) => match b {
+          true => ast = Rc::clone(then),
+          false => ast = Rc::clone(alt),
+        },
         _ => panic!("`if` requires a boolean test value"),
       }
     } else if first.is_keyword("set!") {
@@ -240,45 +219,36 @@ fn eval(
       });
       return Expr::LambdaId(pstore.len() - 1);
     } else {
-      // proc call
-      let mut exprs: Vec<Expr> = ast
-        .children
-        .as_ref()
-        .expect("error: proc_call expected AST node children")
+      // proc call; (proc expr1 expr2 ...)
+      let mut exprs: Vec<Expr> = children
         .iter()
         .map(|node| eval(Rc::clone(node), Rc::clone(&denv), pstore))
         .collect();
       let proc = exprs.remove(0);
 
-      // hack: grab the output from match and return if Some(x), else continue iteration
       let res = match proc {
         Expr::Function(f) => Some(f(&exprs)),
         Expr::LambdaId(lambda_id) => {
-          // println!("lambda call {:? }{:?}", args, pstore);
           let ctx = &pstore[lambda_id];
-          // let mut local_env = HashMap::new();
-
-          let mut local_env = ctx
-            .env
-            .try_borrow_mut()
-            .expect("error: could not borrow denv");
+          let mut local_env = ctx.env.borrow_mut();
           // TODO: here check that the lists are equal length!
           for (arg_name, arg_value) in izip!(&ctx.arg_names, exprs) {
             local_env.data.insert(arg_name.to_string(), arg_value);
           }
 
+          // tail call optimisation; set new ast, denv and continue with loop
           denv = Rc::clone(&ctx.env);
-          ast = Rc::clone(&pstore[lambda_id].body);
+          ast = Rc::clone(&ctx.body);
           None
         }
-        _ => panic!("Expected Expr::Function"),
+        _ => panic!("Expected Expr::Function or Expr::Lambda"),
       };
 
       if res.is_some() {
         return res.unwrap();
       }
     }
-  } // loop
+  }
 }
 
 /// the iconic lisp repl
