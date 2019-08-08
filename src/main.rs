@@ -1,4 +1,3 @@
-use regex::Regex;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
@@ -9,18 +8,18 @@ use std::rc::Rc;
 mod builtins;
 mod types;
 mod utils;
+mod parser;
 
 use builtins::{ellisp_begin, ellisp_equal, ellisp_minus, ellisp_smaller_than, ellisp_sum};
 use types::{Atom, Expr, AST};
 use utils::print_output;
+use parser::{parser, tokenize};
 
 #[macro_use]
 extern crate itertools;
 
-/// Token is just a string
-/// ellisp program is a string that is first tokenised `String => Vec<Token>`
-/// and then atomized by our parser `Token => Atom`
-type Token = String;
+// Note: If you are reading this code, you may want to check parser.rs first
+
 
 /// Dynamic Environment contains all user defined symbols
 /// Per-procedure (lambda) environmnts link to their parent
@@ -64,64 +63,6 @@ struct LambdaContext {
 
 type LambdaContextStore = Vec<LambdaContext>;
 
-/// we only support s-expressions and comments
-/// so we can just expand spaces everywhere and split by it
-fn tokenize(ellisp_program: &str) -> Vec<Token> {
-  let space = " ";
-  // TODO: this comment regexp is going to give us trouble with string literals
-  let comment_re = Regex::new(r";.*\n").unwrap();
-  return comment_re
-    .replace_all(ellisp_program, "")
-    .replace("\n", space)
-    .replace("\t", space)
-    .replace("(", " ( ")
-    .replace(")", " ) ")
-    .split(space)
-    .map(|s| s.to_string())
-    .filter(|s| !s.is_empty())
-    .collect();
-}
-
-/// parser builds an Tree tree of Atoms
-/// currently our language has Symbols and Numbers defined in Atom
-fn atomize(token: Token) -> Atom {
-  if token == "false" {
-    return Atom::Bool(false);
-  }
-  if token == "true" {
-    return Atom::Bool(true);
-  }
-
-  let num = token.parse::<i32>();
-  return match num {
-    Ok(n) => Atom::Number(n),
-    Err(_) => Atom::Symbol(token),
-  };
-}
-
-/// build AST Tree recursively
-fn parser(tokens: &mut Vec<Token>) -> AST {
-  let token = tokens.remove(0);
-  let results: AST = match token.as_str() {
-    "(" => {
-      let mut l = Vec::new();
-      while tokens[0] != ")" {
-        l.push(Rc::new(parser(tokens)));
-      }
-      tokens.remove(0);
-      return AST {
-        atom: None,
-        children: Some(l),
-      };
-    }
-    ")" => panic!("unexpected `)`"),
-    _ => AST {
-      atom: Some(atomize(token)),
-      children: None,
-    },
-  };
-  return results;
-}
 
 /// Eval processes the AST into experssions and evaluates them
 /// We traverse the AST recursively evaluating every leaf so we can reduce everything
@@ -285,7 +226,7 @@ fn driver(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
 	(define sum-to (lambda (n) (if (= n 0) 0 (+ n (sum-to (- n 1))))))
 	(define sum2 (lambda (n acc) (if (= n 0) acc (sum2 (- n 1) (+ n acc)))))
 	;(sum-to 10000)
-	(sum2 1000000 0)
+	(sum2 10000 0)
   ";
 
   let program = format!(
