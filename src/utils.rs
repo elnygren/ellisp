@@ -29,7 +29,7 @@ pub fn pretty_print(ast: &AST) -> String {
   };
 }
 
-pub fn print_output(expr: Expr) -> String {
+pub fn print_output(expr: &Expr) -> String {
   return match expr {
     Expr::Number(i) => format!("{}", i),
     Expr::Function(_) => String::from("Function"),

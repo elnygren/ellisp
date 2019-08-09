@@ -1,6 +1,6 @@
+use crate::types::{Atom, AST};
 use regex::Regex;
 use std::rc::Rc;
-use crate::types::{Atom, AST};
 
 /// Token is just a string
 /// ellisp program is a string that is first tokenised `String => Vec<Token>`
@@ -64,4 +64,61 @@ pub fn parser(tokens: &mut Vec<Token>) -> AST {
     },
   };
   return results;
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  static INPUT: &str = "
+		; this is a program
+
+
+		(hello
+			(there
+				(this is some)
+				(code 1 2 3 4)
+			)
+		)";
+
+  static EXPECTED_ARR: [&str; 18] = [
+    "(", "hello", "(", "there", "(", "this", "is", "some", ")", "(", "code", "1", "2", "3", "4",
+    ")", ")", ")",
+  ];
+
+  #[test]
+  fn test_tokenize() {
+    let result = tokenize(INPUT);
+    let expected: Vec<String> = EXPECTED_ARR.iter().map(|x| x.to_string()).collect();
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn test_parser() {
+    let mut tokens = tokenize(INPUT);
+    let result = parser(&mut tokens);
+
+    #[rustfmt::skip]
+		let expected =
+			AST { atom: None, children: Some([
+				Rc::new(AST { atom: Some(Atom::Symbol("hello".to_string())), children: None }),
+				Rc::new(AST { atom: None, children: Some([
+					Rc::new(AST { atom: Some(Atom::Symbol("there".to_string())), children: None }),
+					Rc::new(AST { atom: None, children: Some([
+						Rc::new(AST { atom: Some(Atom::Symbol("this".to_string())), children: None }),
+						Rc::new(AST { atom: Some(Atom::Symbol("is".to_string())), children: None }),
+						Rc::new(AST { atom: Some(Atom::Symbol("some".to_string())), children: None }),
+					].to_vec()) }),
+					Rc::new(AST { atom: None, children: Some([
+						Rc::new(AST { atom: Some(Atom::Symbol("code".to_string())), children: None }),
+						Rc::new(AST { atom: Some(Atom::Number(1)), children: None }),
+						Rc::new(AST { atom: Some(Atom::Number(2)), children: None }),
+						Rc::new(AST { atom: Some(Atom::Number(3)), children: None }),
+						Rc::new(AST { atom: Some(Atom::Number(4)), children: None }),
+					].to_vec()) })
+				].to_vec()) })
+			].to_vec()) };
+
+    assert_eq!(result, expected);
+  }
 }

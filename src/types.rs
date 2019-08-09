@@ -1,11 +1,14 @@
-use crate::utils::pretty_print;
-use std::fmt;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
+use std::fmt;
+
+use crate::utils::pretty_print;
 /// Common types
 
 /// Atom
 /// parser produces an AST of Atoms
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Atom {
   Bool(bool),
   Symbol(String),
@@ -15,7 +18,7 @@ pub enum Atom {
 
 /// AST Node is either a single Atom, eg. `Atom::Number(1)` or `Atom::Symbol("sum")`
 /// or a list of Atoms: (following is just some pseudo code) `AST["sum", 1, 2, AST["sum", 1, 2]]`
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AST {
   pub atom: Option<Atom>,
   pub children: Option<Vec<Rc<AST>>>,
@@ -78,3 +81,47 @@ impl std::fmt::Debug for Expr {
 		return write!(f, "{}", s);
 	}
 }
+
+
+
+/// Dynamic Environment contains all user defined symbols
+/// Per-procedure (lambda) environmnts link to their parent
+#[derive(Debug)]
+pub struct DynamicEnv {
+  pub parent: Option<Rc<RefCell<DynamicEnv>>>,
+  pub data: HashMap<String, Expr>,
+}
+
+/// Method implementations for DynamicEnv
+/// Recursive .find to look up a symbol from local & parent environments
+/// This is how closures are implemented :-)
+impl DynamicEnv {
+  pub fn find(&self, key: &str) -> Expr {
+    let v = self.data.get(key);
+    match v {
+      Some(v) => v.clone(),
+      None => {
+        return self
+          .parent
+          .as_ref()
+					.expect(&format!("error: symbol `{}` not found", key).to_string())
+          .try_borrow()
+          .expect(&format!("error: symbol `{}` not found", key).to_string())
+          .find(key);
+      }
+    }
+  }
+}
+
+/// Story a lambda's body's AST and the param names
+/// so we can look them up when the lambda is called at `fn lambda_call`
+/// where we eval the body with an environment that has the arguments
+/// set to their corresponding arg_names
+#[derive(Debug)]
+pub struct LambdaContext {
+  pub body: Rc<AST>,
+  pub arg_names: Vec<String>,
+  pub env: Rc<RefCell<DynamicEnv>>,
+}
+
+pub type LambdaContextStore = Vec<LambdaContext>;

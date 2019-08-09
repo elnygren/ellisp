@@ -1,28 +1,44 @@
 use crate::types::Expr;
 
+fn take_numbers(args: &Vec<Expr>) -> Vec<&i32> {
+  return args
+    .iter()
+    .map(|expr| match expr {
+      Expr::Number(n) => n,
+      _ => panic!("< only supports numbers"),
+    })
+    .collect();
+}
+
 pub fn ellisp_sum(args: &Vec<Expr>) -> Expr {
-  let mut sum = 0;
-  for v in args {
-    match v {
-      Expr::Number(n) => sum += n,
-      _ => panic!("sum is only defined for numbers"),
-    }
-  }
-  return Expr::Number(sum);
+  return Expr::Number(
+    args
+      .iter()
+      .map(|v| match v {
+        Expr::Number(n) => n,
+        _ => panic!("sum is only defined for numbers"),
+      })
+      .fold(0, |acc, x| acc + x),
+  );
 }
 
 pub fn ellisp_minus(args: &Vec<Expr>) -> Expr {
-  let mut acc = match args[0] {
-    Expr::Number(n) => n,
-    _ => panic!("minus is only defined for numbers"),
-  };
-  for v in args.iter().skip(1) {
-    match v {
-      Expr::Number(n) => acc -= n,
-      _ => panic!("minus is only defined for numbers"),
-    }
-  }
-  return Expr::Number(acc);
+  return Expr::Number(
+    args
+      .iter()
+      .skip(1)
+      .map(|v| match v {
+        Expr::Number(n) => n,
+        _ => panic!("minus is only defined for numbers"),
+      })
+      .fold(
+        match args[0] {
+          Expr::Number(n) => n,
+          _ => panic!("minus is only defined for numbers"),
+        },
+        |acc, x| acc - x,
+      ),
+  );
 }
 
 pub fn ellisp_begin(args: &Vec<Expr>) -> Expr {
@@ -31,16 +47,39 @@ pub fn ellisp_begin(args: &Vec<Expr>) -> Expr {
 }
 
 pub fn ellisp_smaller_than(args: &Vec<Expr>) -> Expr {
-  let args: Vec<&i32> = args
-    .iter()
-    .map(|expr| match expr {
-      Expr::Number(n) => n,
-      _ => panic!("< only supports numbers"),
-    })
-    .collect();
+  let args = take_numbers(args);
+  for (i, v) in args.iter().enumerate().skip(1) {
+    if args[i - 1] >= v {
+      return Expr::Bool(false);
+    }
+  }
+  return Expr::Bool(true);
+}
 
+pub fn ellisp_smaller_or_equal_than(args: &Vec<Expr>) -> Expr {
+  let args = take_numbers(args);
   for (i, v) in args.iter().enumerate().skip(1) {
     if args[i - 1] > v {
+      return Expr::Bool(false);
+    }
+  }
+  return Expr::Bool(true);
+}
+
+pub fn ellisp_larger_than(args: &Vec<Expr>) -> Expr {
+  let args = take_numbers(args);
+  for (i, v) in args.iter().enumerate().skip(1) {
+    if args[i - 1] <= v {
+      return Expr::Bool(false);
+    }
+  }
+  return Expr::Bool(true);
+}
+
+pub fn ellisp_larger_or_equal_than(args: &Vec<Expr>) -> Expr {
+  let args = take_numbers(args);
+  for (i, v) in args.iter().enumerate().skip(1) {
+    if args[i - 1] < v {
       return Expr::Bool(false);
     }
   }
@@ -55,4 +94,16 @@ pub fn ellisp_equal(args: &Vec<Expr>) -> Expr {
   });
 
   return Expr::Bool(result);
+}
+
+pub fn ellisp_multiply(args: &Vec<Expr>) -> Expr {
+  return Expr::Number(
+    args
+      .iter()
+      .map(|v| match v {
+        Expr::Number(n) => n,
+        _ => panic!("multiply is only defined for numbers"),
+      })
+      .fold(1, |acc, x| acc * x),
+  );
 }
