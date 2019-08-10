@@ -59,13 +59,13 @@ impl fmt::Display for AST {
 /// All of our builtins are Vec<Expr> -> Expr (eg. sum, minus, ...)
 #[derive(Clone)]
 pub enum Expr {
-  Number(i32),
-  Function(fn(args: &Vec<Expr>) -> Expr),
   Bool(bool),
+  Function(fn(args: Vec<Expr>) -> Expr),
   LambdaId(usize), // "pointer" to our ProcedureStore
-  Nop,
-  Sexp(Rc<AST>),
   List(Vec<Expr>),
+  Nop,
+  Number(i32),
+  Sexp(Rc<AST>),
   // TODO: support doubles, strings... ?
 }
 

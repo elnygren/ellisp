@@ -148,7 +148,7 @@ pub fn eval(
       let proc = exprs.remove(0);
 
       let res = match proc {
-        Expr::Function(f) => Some(f(&exprs)),
+        Expr::Function(f) => Some(f(exprs)),
         Expr::LambdaId(lambda_id) => {
           let ctx = &pstore[lambda_id];
 
