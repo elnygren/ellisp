@@ -5,16 +5,16 @@ use std::io;
 use std::io::prelude::*;
 use std::rc::Rc;
 
-mod interpreter;
 mod builtins;
+mod interpreter;
+mod parser;
 mod types;
 mod utils;
-mod parser;
 
-use utils::print_output;
+use interpreter::eval;
 use parser::{parser, tokenize};
-use interpreter::{eval};
 use types::{DynamicEnv, LambdaContextStore};
+use utils::print_output;
 
 #[macro_use]
 extern crate itertools;
@@ -23,7 +23,6 @@ extern crate itertools;
 /// - types.rs contains custom types like AST, Atom, Expr...
 /// - parser.rs is where everything starts; tokenize + parser
 /// - interpreter.rs contains `fn eval` which is the beef here
-
 
 /// the iconic lisp repl
 fn repl(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
@@ -43,23 +42,7 @@ fn repl(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
 /// quick & dirty way to run some program
 fn driver(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
   let program = "
-  ; def + lambdas
-  ; (def a (lambda (x) (+ x 40)))
-  ; (def b (lambda (x) (+ 0 2)))
-  ; (def c (24))
-  ; (def d -24)
-  ; (def result-1 (+ (a 2) (b 666) c d))
-  ; (do
-    ; (set! result-1 666)
-    ; result-1)
-	;(quote (well hello (there darkness) my old friend))
-  ;(a (a 20))
-  ;(define (sum-to n) (if (= n 0) 0 (+ n (sum-to (- n 1)))))
-	;(fib 30)
-	(define sum-to (lambda (n) (if (= n 0) 0 (+ n (sum-to (- n 1))))))
-	(define sum2 (lambda (n acc) (if (= n 0) acc (sum2 (- n 1) (+ n acc)))))
-	;(sum-to 10000)
-	(sum2 10000 0)
+    (quote (replace me))
   ";
 
   let program = format!(
@@ -72,7 +55,7 @@ fn driver(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
   let ast = parser(&mut tokens);
   // println!("AST: {:?}", ast);
   let out = eval(Rc::new(ast), env, pstore);
-  println!("Program: {}", program);
+  println!("Program: {}\n", program);
   print!("{}\n> ", print_output(&out));
 }
 
@@ -92,5 +75,3 @@ fn main() {
     driver(dynamic_env, &mut pstore);
   }
 }
-
-

@@ -46,13 +46,13 @@ ellisp 0.1 REPL
 
 
 > (def a 666)
-Nop
+Null
 > (def b (lambda (x) (+ x a)))
-Nop
+Null
 > (b 42)
 Number(708)
 > (def fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
-Nop
+Null
 > (fib 4)
 Number(3)
 > (fib 10)

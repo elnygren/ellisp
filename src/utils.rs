@@ -40,5 +40,14 @@ pub fn print_output(expr: &Expr) -> String {
     Expr::LambdaId(_) => String::from("Lambda"),
     Expr::Nop => String::from(""),
     Expr::Sexp(ast) => pretty_print(&ast),
+    Expr::List(list) => {
+      return "(".to_string()
+        + &list
+          .iter()
+          .map(|x| print_output(x))
+          .collect::<Vec<String>>()
+          .join(" ")
+        + &")".to_string();
+    }
   };
 }

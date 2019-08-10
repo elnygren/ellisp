@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::fmt;
+use std::rc::Rc;
 
 use crate::utils::pretty_print;
 /// Common types
@@ -64,25 +64,25 @@ pub enum Expr {
   Bool(bool),
   LambdaId(usize), // "pointer" to our ProcedureStore
   Nop,
-  Sexp(AST),
+  Sexp(Rc<AST>),
+  List(Vec<Expr>),
   // TODO: support doubles, strings... ?
 }
 
 impl std::fmt::Debug for Expr {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
-		let s = match self {
-			Expr::Number(i) => format!("{}", i),
-			Expr::Function(_) => String::from("Expr::Function"),
-			Expr::Bool(b) => format!("{}", b),
-			Expr::LambdaId(i) => format!("Expr::Lambda: {}", i),
-			Expr::Nop => String::from("Expr::Nop"),
-			Expr::Sexp(ast) => format!("{}", ast),
-		};
-		return write!(f, "{}", s);
-	}
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+    let s = match self {
+      Expr::Number(i) => format!("{}", i),
+      Expr::Function(_) => String::from("Expr::Function"),
+      Expr::Bool(b) => format!("{}", b),
+      Expr::LambdaId(i) => format!("Expr::Lambda: {}", i),
+      Expr::Nop => String::from("Expr::Nop"),
+      Expr::Sexp(ast) => format!("Expr::sexp {}", ast),
+      Expr::List(list) => format!("{:?}", list),
+    };
+    return write!(f, "{}", s);
+  }
 }
-
-
 
 /// Dynamic Environment contains all user defined symbols
 /// Per-procedure (lambda) environmnts link to their parent
@@ -104,7 +104,7 @@ impl DynamicEnv {
         return self
           .parent
           .as_ref()
-					.expect(&format!("error: symbol `{}` not found", key).to_string())
+          .expect(&format!("error: symbol `{}` not found", key).to_string())
           .try_borrow()
           .expect(&format!("error: symbol `{}` not found", key).to_string())
           .find(key);

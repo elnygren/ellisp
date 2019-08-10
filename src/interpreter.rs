@@ -5,6 +5,29 @@ use std::rc::Rc;
 use crate::builtins::*;
 use crate::types::{Atom, DynamicEnv, Expr, LambdaContext, LambdaContextStore, AST};
 
+/// unpack `(quote anything here is literal)` from AST -> Expr
+fn quote_unpack(ast: Rc<AST>) -> Expr {
+  match ast.atom.as_ref() {
+    Some(atom) => match atom {
+      Atom::Bool(x) => Expr::Bool(*x),
+      Atom::Number(x) => Expr::Number(*x),
+      Atom::Symbol(_) => Expr::Sexp(ast),
+    },
+    None => match ast.children.as_ref() {
+      Some(children) => match children.len() {
+        0 => Expr::List([].to_vec()),
+        _ => Expr::List(
+          children
+            .iter()
+            .map(|child| quote_unpack(Rc::clone(&child)))
+            .collect::<Vec<Expr>>(),
+        ),
+      },
+      None => panic!("`quote_unpac` received invalid AST"),
+    },
+  }
+}
+
 /// Eval processes the AST into experssions and evaluates them
 /// We traverse the AST recursively evaluating every leaf so we can reduce everything
 /// to (proc arg1 arg2 ... argN) form and just call the function corresponding to proc
@@ -36,6 +59,7 @@ pub fn eval(
           "+" => Expr::Function(ellisp_sum),
           "-" => Expr::Function(ellisp_minus),
           "*" => Expr::Function(ellisp_multiply),
+          "/" => Expr::Function(ellisp_div),
           "begin" => Expr::Function(ellisp_begin),
           "do" => Expr::Function(ellisp_begin),
           "=" => Expr::Function(ellisp_equal),
@@ -43,6 +67,13 @@ pub fn eval(
           "<=" => Expr::Function(ellisp_smaller_or_equal_than),
           ">" => Expr::Function(ellisp_larger_than),
           ">=" => Expr::Function(ellisp_larger_or_equal_than),
+          "null?" => Expr::Function(ellisp_isnull),
+          "list" => Expr::Function(ellisp_list),
+          "cons" => Expr::Function(ellisp_cons),
+          "car" => Expr::Function(ellisp_car),
+          "cdr" => Expr::Function(ellisp_cdr),
+          "append" => Expr::Function(ellisp_append),
+          "length" => Expr::Function(ellisp_length),
           // dynamic env
           _ => {
             return denv
@@ -61,6 +92,9 @@ pub fn eval(
     // (proc arg1 arg2 arg3 ... )
     // every argN can be a full expression or a single atom; both are checked recursively
     let children = ast.children.as_ref().expect("error: children is None");
+    if children.len() == 0 {
+      return Expr::List([].to_vec());
+    }
     let first = &children[0];
 
     if first.is_keyword("def") || first.is_keyword("define") {
@@ -85,7 +119,8 @@ pub fn eval(
       denv.borrow_mut().data.insert(key, value);
       return Expr::Nop;
     } else if first.is_keyword("quote") {
-      return Expr::Sexp((*children[1]).clone());
+      // quote can contain literals, eg. for list
+      return quote_unpack(Rc::clone(&children[1]));
     } else if first.is_keyword("lambda") {
       // store lambda's AST body & arg_names for later (re)use
       // we clone data here because LambdaContext stores lambda bodies after the entire AST has been freed
@@ -213,6 +248,13 @@ mod tests {
     assert_eq!(call_eval_print("(>= 3 2 1)"), "true");
     assert_eq!(call_eval_print("(> 3 3 2)"), "false");
     assert_eq!(call_eval_print("(>= 3 2 1)"), "true");
+
+    assert_eq!(call_eval_print("(list 3 2 1)"), "(3 2 1)");
+    assert_eq!(call_eval_print("(car (list 3 2 1))"), "3");
+    assert_eq!(call_eval_print("(cdr (list 3 2 1))"), "(2 1)");
+    assert_eq!(call_eval_print("(cdr (list))"), "()");
+    assert_eq!(call_eval_print("(append (list 3 2 1) 0)"), "(3 2 1 0)");
+    // assert_eq!(call_eval_print("(cons 4 (list 3 2 1))"), "[4 3 2 1]");
   }
 
   #[test]
@@ -248,6 +290,57 @@ mod tests {
         .to_vec(),
       ),
       ["", "3", "6", "3",].to_vec()
+    );
+
+    assert_eq!(
+      call_many_print(
+        [
+          "(define twice (lambda (x) (* 2 x)))",
+          "(twice 5)",
+          "(define compose (lambda (f g) (lambda (x) (f (g x)))))",
+          "((compose list twice) 5)",
+          "(define repeat (lambda (f) (compose f f)))",
+          "((repeat twice) 5)",
+          "((repeat (repeat twice)) 5)",
+          "(define abs (lambda (n) ((if (> n 0) + -) 0 n)))",
+          "(list (abs -3) (abs 0) (abs 3))",
+          "(define combine (lambda (f)
+            (lambda (x y)
+             (if (null? x) (quote ())
+               (f (list (car x) (car y))
+                ((combine f) (cdr x) (cdr y)))))))",
+          "(define zip (combine cons))",
+          "(zip (list 1 2 3 4) (list 5 6 7 8))",
+          "(define riff-shuffle (lambda (deck) (begin
+            (define take (lambda (n seq) (if (<= n 0) (quote ()) (cons (car seq) (take (- n 1) (cdr seq))))))
+            (define drop (lambda (n seq) (if (<= n 0) seq (drop (- n 1) (cdr seq)))))
+            (define mid (lambda (seq) (/ (length seq) 2)))
+            ((combine append) (take (mid deck) deck) (drop (mid deck) deck)))))",
+          "(riff-shuffle (list 1 2 3 4 5 6 7 8))",
+          "((repeat riff-shuffle) (list 1 2 3 4 5 6 7 8))",
+          "(riff-shuffle (riff-shuffle (riff-shuffle (list 1 2 3 4 5 6 7 8))))",
+        ]
+        .to_vec()
+      ),
+      [
+        "",
+        "10",
+        "",
+        "(10)",
+        "",
+        "20",
+        "80",
+        "",
+        "(3 0 3)",
+        "",
+        "",
+        "((1 5) (2 6) (3 7) (4 8))",
+        "",
+        "(1 5 2 6 3 7 4 8)",
+				"(1 3 5 7 2 4 6 8)",
+				"(1 2 3 4 5 6 7 8)",
+      ]
+      .to_vec()
     );
 
     assert_eq!(
