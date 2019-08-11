@@ -1,13 +1,14 @@
 use crate::types::{Atom, Expr, AST};
 
 pub fn pretty_print(ast: &AST) -> String {
-  return match ast.atom.as_ref() {
+  match ast.atom.as_ref() {
     Some(atom) => match atom {
       Atom::Bool(b) => match b {
         true => String::from("true"),
         false => String::from("false"),
       },
       Atom::Symbol(sym) => sym.to_string(),
+      Atom::Keyword(sym) => sym.to_string(),
       Atom::Number(i) => format!("{}", i),
     },
     None => {
@@ -24,13 +25,13 @@ pub fn pretty_print(ast: &AST) -> String {
           .join(" "),
       );
       s.push(')');
-      return s.clone();
+      s.clone()
     }
-  };
+  }
 }
 
 pub fn print_output(expr: &Expr) -> String {
-  return match expr {
+  match expr {
     Expr::Number(i) => format!("{}", i),
     Expr::Function(_) => String::from("Function"),
     Expr::Bool(b) => match b {
@@ -41,13 +42,13 @@ pub fn print_output(expr: &Expr) -> String {
     Expr::Nop => String::from(""),
     Expr::Sexp(ast) => pretty_print(&ast),
     Expr::List(list) => {
-      return "(".to_string()
+      "(".to_string()
         + &list
           .iter()
           .map(|x| print_output(x))
           .collect::<Vec<String>>()
           .join(" ")
-        + &")".to_string();
+        + &")".to_string()
     }
-  };
+  }
 }

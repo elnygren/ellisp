@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::builtins::*;
-use crate::types::{Atom, DynamicEnv, Expr, LambdaContext, LambdaContextStore, AST};
+use crate::types::{Atom, DynamicEnv, Expr, Keyword, LambdaContext, LambdaContextStore, AST};
 
 /// unpack `(quote anything here is literal)` from AST -> Expr
 fn quote_unpack(ast: Rc<AST>) -> Expr {
@@ -12,6 +12,7 @@ fn quote_unpack(ast: Rc<AST>) -> Expr {
       Atom::Bool(x) => Expr::Bool(*x),
       Atom::Number(x) => Expr::Number(*x),
       Atom::Symbol(_) => Expr::Sexp(ast),
+      Atom::Keyword(_) => Expr::Sexp(ast),
     },
     None => match ast.children.as_ref() {
       Some(children) => match children.len() {
@@ -74,16 +75,16 @@ pub fn eval(
           "cdr" => Expr::Function(ellisp_cdr),
           "append" => Expr::Function(ellisp_append),
           "length" => Expr::Function(ellisp_length),
+          "len" => Expr::Function(ellisp_length),
           // dynamic env
-          _ => {
-            return denv
-              .try_borrow()
-              .expect("error: borrowing denv failed")
-              .find(x.as_str());
-          }
+          _ => denv
+            .try_borrow()
+            .expect("error: borrowing denv failed")
+            .find(x.as_str()),
         },
         Atom::Number(x) => Expr::Number(*x),
         Atom::Bool(x) => Expr::Bool(*x),
+        Atom::Keyword(_) => panic!("error: keyword should have been handled already"),
       };
     };
 
@@ -95,89 +96,97 @@ pub fn eval(
     if children.len() == 0 {
       return Expr::List([].to_vec());
     }
-    let first = &children[0];
 
-    if first.is_keyword("def") || first.is_keyword("define") {
-      let (name, expr) = (&children[1], &children[2]);
-      let name = name.get_atom_symbol("error: `def` expects a symbol & expr, eg; (def a 5).");
-      let res = eval(Rc::clone(expr), Rc::clone(&denv), pstore);
-      denv.borrow_mut().data.insert(name, res);
-      return Expr::Nop;
-    } else if first.is_keyword("if") {
-      let (test, then, alt) = (&children[1], &children[2], &children[3]);
-      match eval(Rc::clone(test), Rc::clone(&denv), pstore) {
-        Expr::Bool(b) => match b {
-          true => ast = Rc::clone(then),
-          false => ast = Rc::clone(alt),
-        },
-        _ => panic!("`if` requires a boolean test value"),
-      }
-    } else if first.is_keyword("set!") {
-      let (symbol, exp) = (&children[1], &children[2]);
-      let key = symbol.get_atom_symbol("error: set! expects a symbol as first arg");
-      let value = eval(Rc::clone(exp), Rc::clone(&denv), pstore);
-      denv.borrow_mut().data.insert(key, value);
-      return Expr::Nop;
-    } else if first.is_keyword("quote") {
-      // quote can contain literals, eg. for list
-      return quote_unpack(Rc::clone(&children[1]));
-    } else if first.is_keyword("lambda") {
-      // store lambda's AST body & arg_names for later (re)use
-      // we clone data here because LambdaContext stores lambda bodies after the entire AST has been freed
-      // for example, in repl each input is a new AST but we still want to have our old lambdas
-      let arg_names: Vec<String> = children[1]
-        .children
-        .as_ref()
-        .expect("error: unwrapping lambda arg_names failed")
-        .iter()
-        .map(|node| node.get_atom_symbol("error: lambda expects symbols as arg names"))
-        .collect();
-      let body = children[2].clone();
-      pstore.push(LambdaContext {
-        body: Rc::clone(&body),
-        arg_names: arg_names,
-        env: Rc::clone(&denv),
-      });
-      return Expr::LambdaId(pstore.len() - 1);
-    } else {
-      // proc call; (proc expr1 expr2 ...)
-      let mut exprs: Vec<Expr> = children
-        .iter()
-        .map(|node| eval(Rc::clone(node), Rc::clone(&denv), pstore))
-        .collect();
-      let proc = exprs.remove(0);
-
-      let res = match proc {
-        Expr::Function(f) => Some(f(exprs)),
-        Expr::LambdaId(lambda_id) => {
-          let ctx = &pstore[lambda_id];
-
-          // create new dynamic env with arg names & values set for executing lambda body
-          let local_env = Rc::new(RefCell::new(DynamicEnv {
-            data: HashMap::new(),
-            parent: Some(Rc::clone(&ctx.env)),
-          }));
-          // TODO: here check that the lists are equal length!
-          for (arg_name, arg_value) in izip!(&ctx.arg_names, exprs) {
-            local_env
-              .borrow_mut()
-              .data
-              .insert(arg_name.to_string(), arg_value);
-          }
-
-          // tail call optimisation; set new ast, denv and continue with loop
-          // lambda gets executed correctly on the next iteration
-          denv = Rc::clone(&local_env);
-          ast = Rc::clone(&ctx.body);
-          None
+    match &children[0].atom.as_ref() {
+      Some(Atom::Keyword(keyword)) => match keyword {
+        Keyword::Def => {
+          let (name, expr) = (&children[1], &children[2]);
+          let name = name.get_atom_symbol("error: `def` expects a symbol & expr, eg; (def a 5).");
+          let res = eval(Rc::clone(expr), Rc::clone(&denv), pstore);
+          denv.borrow_mut().data.insert(name, res);
+          return Expr::Nop;
         }
-        _ => panic!("Expected Expr::Function or Expr::Lambda"),
-      };
+        Keyword::If => {
+          let (test, then, alt) = (&children[1], &children[2], &children[3]);
+          match eval(Rc::clone(test), Rc::clone(&denv), pstore) {
+            Expr::Bool(b) => match b {
+              true => ast = Rc::clone(then),
+              false => ast = Rc::clone(alt),
+            },
+            _ => panic!("`if` requires a boolean test value"),
+          }
+        }
+        Keyword::Set => {
+          let (symbol, exp) = (&children[1], &children[2]);
+          let key = symbol.get_atom_symbol("error: set! expects a symbol as first arg");
+          let value = eval(Rc::clone(exp), Rc::clone(&denv), pstore);
+          denv.borrow_mut().data.insert(key, value);
+          return Expr::Nop;
+        }
+        Keyword::Quote => {
+          // quote can contain literals, eg. for list
+          return quote_unpack(Rc::clone(&children[1]));
+        }
+        Keyword::Lambda => {
+          // store lambda's AST body & arg_names for later (re)use
+          // we clone data here because LambdaContext stores lambda bodies after the entire AST has been freed
+          // for example, in repl each input is a new AST but we still want to have our old lambdas
+          let arg_names: Vec<String> = children[1]
+            .children
+            .as_ref()
+            .expect("error: unwrapping lambda arg_names failed")
+            .iter()
+            .map(|node| node.get_atom_symbol("error: lambda expects symbols as arg names"))
+            .collect();
+          let body = children[2].clone();
+          pstore.push(LambdaContext {
+            body: Rc::clone(&body),
+            arg_names: arg_names,
+            env: Rc::clone(&denv),
+          });
+          return Expr::LambdaId(pstore.len() - 1);
+        }
+      },
+      _ => {
+        // proc call; (proc expr1 expr2 ...)
+        let mut exprs: Vec<Expr> = children
+          .iter()
+          .map(|node| eval(Rc::clone(node), Rc::clone(&denv), pstore))
+          .collect();
+        let proc = exprs.remove(0);
 
-      if res.is_some() {
-        return res.unwrap();
+        let res = match proc {
+          Expr::Function(f) => Some(f(exprs)),
+          Expr::LambdaId(lambda_id) => {
+            let ctx = &pstore[lambda_id];
+
+            // create new dynamic env with arg names & values set for executing lambda body
+            let local_env = Rc::new(RefCell::new(DynamicEnv {
+              data: HashMap::new(),
+              parent: Some(Rc::clone(&ctx.env)),
+            }));
+            // TODO: here check that the lists are equal length!
+            for (arg_name, arg_value) in izip!(&ctx.arg_names, exprs) {
+              local_env
+                .borrow_mut()
+                .data
+                .insert(arg_name.to_string(), arg_value);
+            }
+
+            // tail call optimisation; set new ast, denv and continue with loop
+            // lambda gets executed correctly on the next iteration
+            denv = Rc::clone(&local_env);
+            ast = Rc::clone(&ctx.body);
+            None
+          }
+          _ => panic!("Expected Expr::Function or Expr::Lambda"),
+        };
+
+        if res.is_some() {
+          return res.unwrap();
+        }
       }
-    }
+    };
   }
 }
 
@@ -198,21 +207,21 @@ mod tests {
     }));
     let mut pstore = Vec::new();
 
-    return inputs
+    inputs
       .iter()
       .map(|s| {
         let ast = parser(&mut tokenize(s));
         let out = eval(Rc::new(ast), Rc::clone(&env), &mut pstore);
-        return out;
+        out
       })
-      .collect();
+      .collect()
   }
 
   fn call_many_print(inputs: Vec<&str>) -> Vec<String> {
-    return call_many(inputs)
+    call_many(inputs)
       .iter()
       .map(|out| print_output(out))
-      .collect();
+      .collect()
   }
 
   fn call_eval(s: &str) -> Expr {
@@ -220,15 +229,15 @@ mod tests {
       data: HashMap::new(),
       parent: None,
     }));
-    return eval(
+    eval(
       Rc::new(parser(&mut tokenize(s))),
       dynamic_env,
       &mut Vec::new(),
-    );
+    )
   }
 
   fn call_eval_print(s: &str) -> String {
-    return print_output(&call_eval(s));
+    print_output(&call_eval(s))
   }
 
   #[test]

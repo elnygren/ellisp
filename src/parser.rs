@@ -1,5 +1,6 @@
-use crate::types::{Atom, AST};
+use crate::types::{Atom, Keyword, AST};
 use regex::Regex;
+use std::convert::TryFrom;
 use std::rc::Rc;
 
 /// Token is just a string
@@ -13,7 +14,7 @@ pub fn tokenize(ellisp_program: &str) -> Vec<Token> {
   let space = " ";
   // TODO: this comment regexp is going to give us trouble with string literals
   let comment_re = Regex::new(r";.*\n").unwrap();
-  return comment_re
+  comment_re
     .replace_all(ellisp_program, "")
     .replace("\n", space)
     .replace("\t", space)
@@ -22,48 +23,46 @@ pub fn tokenize(ellisp_program: &str) -> Vec<Token> {
     .split(space)
     .map(|s| s.to_string())
     .filter(|s| !s.is_empty())
-    .collect();
+    .collect()
 }
 
 /// parser builds an Tree tree of Atoms
 /// currently our language has Symbols and Numbers defined in Atom
 fn atomize(token: Token) -> Atom {
-  if token == "false" {
-    return Atom::Bool(false);
+  match token.as_str() {
+    "false" => Atom::Bool(false),
+    "true" => Atom::Bool(true),
+    _ => match token.parse::<i32>() {
+      Ok(n) => Atom::Number(n),
+      Err(_) => match Keyword::try_from(token.as_str()) {
+        Ok(kw) => Atom::Keyword(kw),
+        Err(_) => Atom::Symbol(token),
+      },
+    },
   }
-  if token == "true" {
-    return Atom::Bool(true);
-  }
-
-  let num = token.parse::<i32>();
-  return match num {
-    Ok(n) => Atom::Number(n),
-    Err(_) => Atom::Symbol(token),
-  };
 }
 
 /// build AST Tree recursively
 pub fn parser(tokens: &mut Vec<Token>) -> AST {
   let token = tokens.remove(0);
-  let results: AST = match token.as_str() {
+  match token.as_str() {
     "(" => {
       let mut l = Vec::new();
       while tokens[0] != ")" {
         l.push(Rc::new(parser(tokens)));
       }
       tokens.remove(0);
-      return AST {
+      AST {
         atom: None,
         children: Some(l),
-      };
+      }
     }
     ")" => panic!("unexpected `)`"),
     _ => AST {
       atom: Some(atomize(token)),
       children: None,
     },
-  };
-  return results;
+  }
 }
 
 #[cfg(test)]
