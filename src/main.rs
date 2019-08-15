@@ -1,10 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
-use std::io;
-use std::io::prelude::*;
 use std::rc::Rc;
-
 mod builtins;
 mod interpreter;
 mod parser;
@@ -16,6 +13,9 @@ use parser::{parser, tokenize};
 use types::{DynamicEnv, LambdaContextStore};
 use utils::print_output;
 
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
+
 #[macro_use]
 extern crate itertools;
 
@@ -24,19 +24,35 @@ extern crate itertools;
 /// - parser.rs is where everything starts; tokenize + parser
 /// - interpreter.rs contains `fn eval` which is the beef here
 
-/// the iconic lisp repl
+/// the iconic lisp repl with rustyline (GNU Readline implementation in Rust)
 fn repl(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
-  print!("ellisp 0.1 REPL\n\n> ");
-  let _ = io::stdout().flush();
-  let stdin = io::stdin();
-  let stdin_lock = stdin.lock();
-
-  stdin_lock.lines().filter_map(|l| l.ok()).for_each(|s| {
-    let ast = parser(&mut tokenize(s.as_str()));
-    let out = eval(Rc::new(ast), Rc::clone(&env), pstore);
-    print!("{}\n> ", print_output(&out));
-    let _ = io::stdout().flush();
-  });
+  let mut rl = Editor::<()>::new();
+  print!("ellisp 0.1 REPL\n");
+  loop {
+    let readline = rl.readline(">>> ");
+    match readline {
+      Ok(line) => {
+        let s = line.as_str();
+        rl.add_history_entry(s);
+        // parse, eval & print
+        let ast = parser(&mut tokenize(s));
+        let out = eval(Rc::new(ast), Rc::clone(&env), pstore);
+        print!("{}", print_output(&out));
+      }
+      Err(ReadlineError::Interrupted) => {
+        println!("CTRL-C");
+        break;
+      }
+      Err(ReadlineError::Eof) => {
+        println!("CTRL-D");
+        break;
+      }
+      Err(err) => {
+        println!("Error: {:?}", err);
+        break;
+      }
+    }
+  }
 }
 
 /// quick & dirty way to run some program

@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 regex = "0.2"
 itertools = "0.7"
+rustyline = "5.0.1"
 
 [profile.release]
 debug = true
