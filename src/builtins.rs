@@ -19,7 +19,7 @@ pub fn ellisp_sum(args: Vec<Expr>) -> Expr {
         Expr::Number(n) => n,
         _ => panic!("sum is only defined for numbers"),
       })
-      .fold(0, |acc, x| acc + x),
+      .sum(),
   )
 }
 
@@ -43,7 +43,7 @@ pub fn ellisp_minus(args: Vec<Expr>) -> Expr {
 }
 
 pub fn ellisp_begin(mut args: Vec<Expr>) -> Expr {
-   args.remove(args.len() - 1)
+  args.remove(args.len() - 1)
 }
 
 pub fn ellisp_smaller_than(args: Vec<Expr>) -> Expr {
@@ -104,7 +104,7 @@ pub fn ellisp_multiply(args: Vec<Expr>) -> Expr {
         Expr::Number(n) => n,
         _ => panic!("multiply is only defined for numbers"),
       })
-      .fold(1, |acc, x| acc * x),
+      .product(),
   )
 }
 
@@ -146,7 +146,7 @@ pub fn ellisp_cons(mut args: Vec<Expr>) -> Expr {
       result.append(l1);
       Expr::List(result)
     }
-    _ => panic!("cons second argument must be a list")
+    _ => panic!("cons second argument must be a list"),
   }
 }
 
@@ -200,7 +200,7 @@ pub fn ellisp_append(mut args: Vec<Expr>) -> Expr {
       result.push(snd);
       Expr::List(result)
     }
-    _ => panic!("append first argument must be a list")
+    _ => panic!("append first argument must be a list"),
   }
 }
 

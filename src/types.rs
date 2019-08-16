@@ -110,15 +110,13 @@ impl DynamicEnv {
   pub fn find(&self, key: &str) -> Expr {
     match self.data.get(key) {
       Some(v) => v.clone(),
-      None => {
-        return self
-          .parent
-          .as_ref()
-          .expect(&format!("error: symbol `{}` not found", key).to_string())
-          .try_borrow()
-          .expect(&format!("error: symbol `{}` not found", key).to_string())
-          .find(key);
-      }
+      None => self
+        .parent
+        .as_ref()
+        .unwrap_or_else(|| panic!("error: symbol `{}` not found", key))
+        .try_borrow()
+        .unwrap_or_else(|_| panic!("error: symbol `{}` not found", key))
+        .find(key),
     }
   }
 }

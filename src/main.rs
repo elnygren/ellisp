@@ -27,7 +27,7 @@ extern crate itertools;
 /// the iconic lisp repl with rustyline (GNU Readline implementation in Rust)
 fn repl(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
   let mut rl = Editor::<()>::new();
-  print!("ellisp 0.1 REPL\n");
+  println!("ellisp 0.1 REPL");
   loop {
     let readline = rl.readline(">>> ");
     match readline {

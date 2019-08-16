@@ -93,7 +93,7 @@ pub fn eval(
     // (proc arg1 arg2 arg3 ... )
     // every argN can be a full expression or a single atom; both are checked recursively
     let children = ast.children.as_ref().expect("error: children is None");
-    if children.len() == 0 {
+    if children.is_empty() {
       return Expr::List([].to_vec());
     }
 
@@ -109,10 +109,13 @@ pub fn eval(
         Keyword::If => {
           let (test, then, alt) = (&children[1], &children[2], &children[3]);
           match eval(Rc::clone(test), Rc::clone(&denv), pstore) {
-            Expr::Bool(b) => match b {
-              true => ast = Rc::clone(then),
-              false => ast = Rc::clone(alt),
-            },
+            Expr::Bool(b) => {
+              if b {
+                ast = Rc::clone(then)
+              } else {
+                ast = Rc::clone(alt)
+              }
+            }
             _ => panic!("`if` requires a boolean test value"),
           }
         }
@@ -141,7 +144,7 @@ pub fn eval(
           let body = children[2].clone();
           pstore.push(LambdaContext {
             body: Rc::clone(&body),
-            arg_names: arg_names,
+            arg_names,
             env: Rc::clone(&denv),
           });
           return Expr::LambdaId(pstore.len() - 1);
