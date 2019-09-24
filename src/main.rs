@@ -33,11 +33,13 @@ fn repl(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
     match readline {
       Ok(line) => {
         let s = line.as_str();
-        rl.add_history_entry(s);
-        // parse, eval & print
-        let ast = parser(&mut tokenize(s));
-        let out = eval(Rc::new(ast), Rc::clone(&env), pstore);
-        print!("{}", print_output(&out));
+        if s.trim_start().len() > 0 {
+          rl.add_history_entry(s);
+          // parse, eval & print
+          let ast = parser(&mut tokenize(s));
+          let out = eval(Rc::new(ast), Rc::clone(&env), pstore);
+          print!("{}", print_output(&out));
+        }
       }
       Err(ReadlineError::Interrupted) => {
         println!("CTRL-C");

@@ -129,6 +129,20 @@ impl DynamicEnv {
         .find(key),
     }
   }
+
+  pub fn set(&mut self, key: String, value: Expr) {
+    if self.data.contains_key(&key) {
+      self.data.insert(key, value);
+    } else {
+      self
+        .parent
+        .as_ref()
+        .unwrap_or_else(|| panic!("error: symbol `{}` not found", key))
+        .try_borrow_mut()
+        .unwrap_or_else(|_| panic!("error: symbol `{}` not found", key))
+        .set(key, value)
+    }
+  }
 }
 
 /// Story a lambda's body's AST and the param names

@@ -69,13 +69,16 @@ pub fn eval(
           ">" => Expr::Function(ellisp_larger_than),
           ">=" => Expr::Function(ellisp_larger_or_equal_than),
           "null?" => Expr::Function(ellisp_isnull),
+          "empty?" => Expr::Function(ellisp_isnull),
           "list" => Expr::Function(ellisp_list),
+          "list?" => Expr::Function(ellisp_islist),
           "cons" => Expr::Function(ellisp_cons),
           "car" => Expr::Function(ellisp_car),
           "cdr" => Expr::Function(ellisp_cdr),
           "append" => Expr::Function(ellisp_append),
           "length" => Expr::Function(ellisp_length),
           "len" => Expr::Function(ellisp_length),
+          "debug!" => Expr::Function(ellisp_print),
           // dynamic env
           _ => denv
             .try_borrow()
@@ -123,7 +126,7 @@ pub fn eval(
           let (symbol, exp) = (&children[1], &children[2]);
           let key = symbol.get_atom_symbol("error: set! expects a symbol as first arg");
           let value = eval(Rc::clone(exp), Rc::clone(&denv), pstore);
-          denv.borrow_mut().data.insert(key, value);
+          denv.borrow_mut().set(key, value);
           return Expr::Nop;
         }
         Keyword::Quote => {

@@ -131,6 +131,16 @@ pub fn ellisp_list(args: Vec<Expr>) -> Expr {
   Expr::List(args.to_vec())
 }
 
+pub fn ellisp_islist(args: Vec<Expr>) -> Expr {
+  if args.len() != 1 {
+    panic!("list? expects exactly one arg")
+  }
+  match args[0] {
+    Expr::List(_) => Expr::Bool(true),
+    _ => Expr::Bool(false),
+  }
+}
+
 /// (cons 1 (list 2 3)) -> (1 2 3)
 pub fn ellisp_cons(mut args: Vec<Expr>) -> Expr {
   if args.len() != 2 {
@@ -151,9 +161,17 @@ pub fn ellisp_cons(mut args: Vec<Expr>) -> Expr {
 }
 
 pub fn ellisp_car(mut args: Vec<Expr>) -> Expr {
+  if args.len() == 0 {
+    panic!("car expects a single argument")
+  }
   match &mut args.swap_remove(0) {
-    Expr::List(list) => list.swap_remove(0),
-    _ => panic!("cdr expects a list"),
+    Expr::List(list) => {
+      if list.len() == 0 {
+        panic!("car received an empty list")
+      }
+      list[0].clone()
+    }
+    _ => panic!("car expects a list"),
   }
 }
 
@@ -165,7 +183,7 @@ pub fn ellisp_cdr(args: Vec<Expr>) -> Expr {
       _ => Expr::List(list[1..].to_vec()),
     },
     // _ => Expr::Nop,
-    _ => panic!("car expects a list"),
+    _ => panic!("cdr expects a list"),
   }
 }
 
@@ -175,12 +193,11 @@ pub fn ellisp_isnull(args: Vec<Expr>) -> Expr {
       0 => Expr::Bool(true),
       _ => Expr::Bool(false),
     },
-    _ => panic!("null? looks for empty list!"),
+    v => panic!("null? looks for empty list, received: {:?}", v),
   }
 }
 
 pub fn ellisp_append(mut args: Vec<Expr>) -> Expr {
-  println!("append, {:?}", args);
   if args.len() != 2 {
     panic!("append expects two arguments");
   }
@@ -209,4 +226,9 @@ pub fn ellisp_length(args: Vec<Expr>) -> Expr {
     Expr::List(list) => Expr::Number(list.len().try_into().unwrap()),
     _ => panic!("length expects a list"),
   }
+}
+
+pub fn ellisp_print(args: Vec<Expr>) -> Expr {
+  println!("debug: {:?}", args);
+  return Expr::Nop;
 }
