@@ -143,4 +143,15 @@ I'm using Scheme syntax highlighting which kinda works :-)
 
 (flatten (list 1 (list 2 (list (list 3))) 4 (list))) ; => (1 2 3 4)
 
+; fold
+(def fold (lambda (data f acc)
+ (if
+  (empty? data) acc
+   (fold 
+    (cdr data) 
+    f 
+    (f (car data) acc)))))
+
+(fold (list 1 2 3) + 0) ; => 6
+
 ```
