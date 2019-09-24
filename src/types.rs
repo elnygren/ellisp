@@ -6,13 +6,23 @@ use std::rc::Rc;
 
 use crate::utils::pretty_print;
 
-/// Some symbols are keywords that we want to pattern match efficiently
+/// Ellisp has special syntactic forms that begin with one of these keywords
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Keyword {
+  /// Declare a variable: `(def name expr)`
+  /// eg. `(define a 5)` or `(def a 5)`
   Def,
+  /// (if test-expr then-expr else-expr)
+  /// eg. `(if (= a 5) 1 0)`
   If,
+  /// Mutate a variable: `(set! name expr)`
+  /// eg. `(set! a 6)`
   Set,
+  /// Quote an expr so it's not evalued
+  /// eg. `(quote (something literally (not evalued directly)))`
   Quote,
+  /// Declare a function: `(lambda params expr)`
+  /// eg. `(def plus2 (lambda (x y) (+ x y)))`
   Lambda,
 }
 
