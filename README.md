@@ -19,6 +19,8 @@ cargo build --release
 
 ### REPL example
 
+Scroll to end for bigger examples.
+
 ```bash
 > cargo run
 
@@ -92,3 +94,53 @@ If you want to see the code, start with `main.rs` -> `fn main()`. From there you
 * performance improvements
   * `DynamicEnv` find has to go N hops up the tree when there are many nested closures or in certain recursion scenarios.
     Perhaps a better data structure is needed here...
+
+## Programming examples
+
+I'm using Scheme syntax highlighting which kinda works :-)
+
+```scheme
+; map
+(def map (lambda (data f)
+ (if
+  (empty? data) (list)
+  (cons
+   (f (car data))
+   (map (cdr data) f)))))
+
+(map (list 1 2 3) (lambda (x) (* x 2))) ; => (2 4 6)
+
+; filter
+(def filter (lambda (data f)
+ (if
+  (empty? data) (list)
+  (if 
+   (f (car data))
+   (cons 
+    (car data) 
+    (filter (cdr data) f))
+   (filter (cdr data) f)))))
+
+(filter (list 1 2 3) (lambda (x) (>= x 2))) ; => (2 3)
+
+; flatten
+(def flatten (lambda (data)
+ (do
+  (def result (list))
+  (def _rec (lambda (data)
+    (if (empty? data)
+     (set! result result) ; we don't yet have better way of saying "do nothing"
+     (if (list? (car data))
+      (do
+       (_rec (car data))
+       (_rec (cdr data)))
+      (do
+       (set! result (append result (car data)))
+       (_rec (cdr data))
+      )))))
+  (_rec data)
+  result)))
+
+(flatten (list 1 (list 2 (list (list 3))) 4 (list))) ; => (1 2 3 4)
+
+```
