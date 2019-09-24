@@ -56,16 +56,20 @@ Special syntactic forms start with a keyword, everything else is a procedure cal
 
 ### Procedures
 
-ellisp provides a standard library. User's can extend and/or override these with `def` and `set!`.
+ellisp provides a small standard library. Users can create their own procedures with `(def name (lambda ...))`.
+Some functions take N arguments where it makes sense (as in Clojure).
 
-Note: some functions take N arguments where it makes sense (as in Clojure).
+Some examples of what's built in:
 
 ```
-+   (+ 1 2 3 4)
--   (- 1 2 3 4)
-=   (= true false true)
-<   (< 1 2 3 4) ; => true
-do  (do <expr1> <expr2> ... <final-expr>) ; => returns result of final expr
+; basic math
+sum, +, -, *, /, 
+=, <, <=, >, >=
+
+; lispy things
+begin, do, null?, 
+list, cons, car, cdr, 
+append, length, len
 ```
 
 ## How does it work?
