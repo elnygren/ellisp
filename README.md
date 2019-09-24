@@ -38,25 +38,19 @@ do  (do <expr1> <expr2> ... <final-expr>) ; => returns result of final expr
 
 ### REPL example
 
-```
-> git clone ...
+```bash
 > cargo run
 
 ellisp 0.1 REPL
-
-
-> (def a 666)
-Null
-> (def b (lambda (x) (+ x a)))
-Null
-> (b 42)
-Number(708)
-> (def fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
-Null
-> (fib 4)
-Number(3)
-> (fib 10)
-Number(55)
+>>> (def a 666)
+>>> (def b (lambda (x) (+ x a)))
+>>> (b 42)
+708
+>>> (def fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
+>>> (fib 4)
+5
+>>> (fib 10)
+89
 ```
 
 ### Programmatic usage example

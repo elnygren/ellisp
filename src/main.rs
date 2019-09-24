@@ -56,23 +56,16 @@ fn repl(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
 }
 
 /// quick & dirty way to run some program
-fn driver(env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
-  let program = "
-    (quote (replace me))
-  ";
-
-  let program = format!(
-    "\n(do\n  ; programs are wrapped in a do-block\n{}\n)",
-    program
-  );
+fn driver(program: &str, env: Rc<RefCell<DynamicEnv>>, pstore: &mut LambdaContextStore) {
+  let program = format!("\n(do\n{}\n)", program);
   let program = program.as_str();
   let mut tokens = tokenize(program);
   // println!("tokens are: {:?}", tokens);
   let ast = parser(&mut tokens);
   // println!("AST: {:?}", ast);
   let out = eval(Rc::new(ast), env, pstore);
-  println!("Program: {}\n", program);
-  print!("{}\n> ", print_output(&out));
+  // println!("Program: {}\n", program);
+  println!("{}", print_output(&out));
 }
 
 fn main() {
@@ -85,9 +78,13 @@ fn main() {
 
   // parse args & run
   let args: Vec<_> = env::args().collect();
-  if args.len() > 1 && args[1] == "repl" {
-    repl(dynamic_env, &mut pstore);
+  if args.len() > 1 {
+    match args[1].as_str() {
+      "repl" => repl(dynamic_env, &mut pstore),
+      "--" => driver(&args[2..].join(" "), dynamic_env, &mut pstore),
+      v => panic!("Unknown arg: {}", v),
+    }
   } else {
-    driver(dynamic_env, &mut pstore);
+    repl(dynamic_env, &mut pstore)
   }
 }
