@@ -59,7 +59,7 @@ Special syntactic forms start with a keyword, everything else is a procedure cal
 ellisp provides a small standard library. Users can create their own procedures with `(def name (lambda ...))`.
 Some functions take N arguments where it makes sense (as in Clojure).
 
-Some examples of what's built in:
+Some examples of what's built in, with native implementations:
 
 ```
 ; basic math
